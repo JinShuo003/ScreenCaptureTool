@@ -9,14 +9,24 @@
     tools:context=".MainActivity">
     
     <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="600dp"
-        android:orientation="vertical">
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="5dp"
+        android:orientation="horizontal">
+
+        <SurfaceView
+            android:id="@+id/surface"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_margin="5dp">
+        </SurfaceView>
 
         <ImageView
             android:id="@+id/screenshot_image"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_margin="5dp"
             android:background="@color/black">
@@ -36,6 +46,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_margin="5dp"
+            android:text="@string/start_capture">
+        </Button>
+
+        <Button
+            android:id="@+id/start_preview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:enabled="false"
             android:text="@string/start_capture">
         </Button>
 
