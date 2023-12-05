@@ -6,13 +6,10 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.media.Image;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Message;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
@@ -82,6 +79,7 @@ public class MainActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && requestCode == PERMISSION_REQUEST_CODE) {
             for (int i = 0; i < permissions.length; i++) {
                 if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(this, R.string.permission_not_enough, Toast.LENGTH_LONG);
                     return;
                 }
             }
@@ -171,9 +169,9 @@ public class MainActivity extends AppCompatActivity {
      */
     private void stopCaptureScreen() {
         screenCaptureBinder.stopCapture();
-        Toast.makeText(this, R.string.stop_capture, Toast.LENGTH_SHORT).show();
         btnStartCapture.setEnabled(true);
         btnStopCapture.setEnabled(false);
+        Toast.makeText(this, R.string.stop_capture, Toast.LENGTH_SHORT).show();
     }
 
     /**
@@ -185,7 +183,6 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(this, ScreenshotService.class);
             bindService(intent, screenshotServiceConnection, BIND_AUTO_CREATE);
         }
-
         Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
         startActivityForResult(screenCaptureIntent, SCREENSHOT_INTENT_REQUEST_CODE);
         Toast.makeText(this, R.string.screenshot, Toast.LENGTH_SHORT).show();

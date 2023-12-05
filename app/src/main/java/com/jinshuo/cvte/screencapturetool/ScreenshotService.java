@@ -79,9 +79,7 @@ public class ScreenshotService extends Service {
         Notification notification = builder.build(); // 获取构建好的Notification
         notification.defaults = Notification.DEFAULT_SOUND; //设置为默认的声音
         startForeground(110, notification);
-
     }
-
 
     /**
      * 获取MediaProjection实例
@@ -128,7 +126,6 @@ public class ScreenshotService extends Service {
     }
 
     private Bitmap screenshot() {
-
         @SuppressLint("WrongConstant") ImageReader imageReader = ImageReader.newInstance(
                 mScreenWidth,
                 mScreenHeight,

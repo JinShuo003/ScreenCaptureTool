@@ -1,19 +1,14 @@
 package com.jinshuo.cvte.screencapturetool;
 
-import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
 import android.media.MediaRecorder;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
@@ -21,14 +16,10 @@ import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.util.Log;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -38,6 +29,9 @@ public class ScreenCaptureService extends Service {
     MediaProjection mediaProjection;
     MediaRecorder mediaRecorder;
     VirtualDisplay virtualDisplay;
+
+    boolean isRecording = false;
+    boolean isPausing = false;
 
     int resultCode;
     Intent data;
@@ -84,7 +78,6 @@ public class ScreenCaptureService extends Service {
 
     }
 
-
     /**
      * 获取MediaProjection实例
      * @return MediaProjection instance
@@ -98,24 +91,24 @@ public class ScreenCaptureService extends Service {
      * @return MediaRecorder instance
      */
     private MediaRecorder createMediaRecorder() {
+        String videoOutputDirectory = getExternalFilesDir("") + "/ScreenCapture";
+        StorageUtils.makeDirectory(videoOutputDirectory);
+
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
         Date curDate = new Date(System.currentTimeMillis());
         String curTime = formatter.format(curDate).replace(" ", "");
-        File file=new File(getExternalFilesDir("")+"/ScreenCapture");
-        if(!file.exists()){
-            file.mkdirs();
-        }
 
         Log.i(TAG, "Create MediaRecorder");
         MediaRecorder mediaRecorder = new MediaRecorder();
+//        mediaRecorder.setPreviewDisplay(surface);
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
         mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_WB);  //after setOutputFormat()
         mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);  //after setOutputFormat()
         mediaRecorder.setVideoSize(mScreenWidth, mScreenHeight);  //after setVideoSource(), setOutFormat()
         mediaRecorder.setVideoFrameRate(60);
-        mediaRecorder.setOutputFile(file.getAbsolutePath() + "/ScreenCapture_" + curTime + ".mp4");
+        mediaRecorder.setOutputFile(videoOutputDirectory + "/ScreenCapture_" + curTime + ".mp4");
         int bitRate = 3 * mScreenWidth * mScreenHeight;
         mediaRecorder.setVideoEncodingBitRate(3 * mScreenWidth * mScreenHeight);
         Log.d(TAG, "createMediaRecorder: bigRate: " + bitRate);
@@ -145,14 +138,17 @@ public class ScreenCaptureService extends Service {
         mediaRecorder = createMediaRecorder();
         virtualDisplay = createVirtualDisplay();
         mediaRecorder.start();
+        isRecording = true;
     }
 
     /**
      * 结束录制屏幕
      */
     public void stopCapture() {
-        mediaRecorder.stop();
-        mediaRecorder.reset();
+        if (isRecording) {
+            mediaRecorder.stop();
+            mediaRecorder.reset();
+        }
     }
 
     @Override
@@ -163,7 +159,9 @@ public class ScreenCaptureService extends Service {
             virtualDisplay = null;
         }
         if (mediaRecorder != null) {
-            mediaRecorder.stop();
+            if (isRecording) {
+                mediaRecorder.stop();
+            }
             mediaRecorder.release();
             mediaRecorder = null;
         }
@@ -205,4 +203,5 @@ public class ScreenCaptureService extends Service {
     public IBinder onBind(Intent intent) {
         return new ScreenCaptureBinder();
     }
+
 }
