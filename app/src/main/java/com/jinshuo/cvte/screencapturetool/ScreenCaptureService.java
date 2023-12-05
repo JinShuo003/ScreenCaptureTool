@@ -6,9 +6,14 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.ImageFormat;
+import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
+import android.media.Image;
+import android.media.ImageReader;
 import android.media.MediaRecorder;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
@@ -16,11 +21,14 @@ import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.util.Log;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -36,6 +44,7 @@ public class ScreenCaptureService extends Service {
     private int mScreenWidth;
     private int mScreenHeight;
     private int mScreenDensity;
+
     public ScreenCaptureService() {
     }
 
@@ -104,7 +113,7 @@ public class ScreenCaptureService extends Service {
         mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
         mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_WB);  //after setOutputFormat()
         mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);  //after setOutputFormat()
-        mediaRecorder.setVideoSize(1080, 1920);  //after setVideoSource(), setOutFormat()
+        mediaRecorder.setVideoSize(mScreenWidth, mScreenHeight);  //after setVideoSource(), setOutFormat()
         mediaRecorder.setVideoFrameRate(60);
         mediaRecorder.setOutputFile(file.getAbsolutePath() + "/ScreenCapture_" + curTime + ".mp4");
         int bitRate = 3 * mScreenWidth * mScreenHeight;
@@ -125,7 +134,7 @@ public class ScreenCaptureService extends Service {
      * @return VirtualDisplay instance
      */
     private VirtualDisplay createVirtualDisplay() {
-        return mediaProjection.createVirtualDisplay(TAG, 1080, 1920, mScreenDensity,
+        return mediaProjection.createVirtualDisplay(TAG, mScreenWidth, mScreenHeight, mScreenDensity,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, mediaRecorder.getSurface(), null, null);
     }
 
@@ -144,6 +153,51 @@ public class ScreenCaptureService extends Service {
     public void stopCapture() {
         mediaRecorder.stop();
         mediaRecorder.reset();
+    }
+
+    private Bitmap screenshot() {
+
+        ImageReader imageReader = ImageReader.newInstance(
+                mScreenWidth,
+                mScreenHeight,
+                PixelFormat.RGBA_8888, 10);
+        VirtualDisplay virtualDisplay = mediaProjection.createVirtualDisplay("screen-mirror",
+                mScreenWidth,
+                mScreenHeight,
+                mScreenDensity,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader.getSurface(), null, null);
+
+        SystemClock.sleep(1000);
+        Image image = imageReader.acquireLatestImage();
+        if (image == null) {
+            return null;
+        }
+        Image.Plane[] planes = image.getPlanes();
+        ByteBuffer buffer = planes[0].getBuffer();
+        int pixelStride = planes[0].getPixelStride();
+        int rowStride = planes[0].getRowStride();
+        int rowPadding = rowStride - pixelStride * mScreenWidth;
+
+        Bitmap bitmap = Bitmap.createBitmap(mScreenWidth + rowPadding / pixelStride,
+                mScreenHeight, Bitmap.Config.ARGB_8888);
+        bitmap.copyPixelsFromBuffer(buffer);
+        String fileName = null;
+        try {
+            Date currentDate = new Date();
+            SimpleDateFormat date = new SimpleDateFormat("yyyyMMddhhmmss");
+            File dir = getExternalFilesDir(null);
+            fileName = dir.getAbsolutePath() + "/" + date.format(currentDate) + ".png";
+            FileOutputStream fos = new FileOutputStream(fileName);
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+            fos.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        image.close();
+//        mediaProjection.stop();
+        virtualDisplay.release();
+        return bitmap;
     }
     @Override
     public void onDestroy() {
@@ -172,9 +226,15 @@ public class ScreenCaptureService extends Service {
             ScreenCaptureService.this.stopCapture();
         }
 
+        public Bitmap screenshot() {
+            return ScreenCaptureService.this.screenshot();
+        }
+
         public void registerScreenInfo(DisplayMetrics metrics) {
-            mScreenWidth = metrics.widthPixels;
-            mScreenHeight = metrics.heightPixels;
+//            mScreenWidth = metrics.widthPixels;
+//            mScreenHeight = metrics.heightPixels;
+            mScreenWidth = 720;
+            mScreenHeight = 1280;
             mScreenDensity = metrics.densityDpi;
         }
 
