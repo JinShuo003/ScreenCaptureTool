@@ -28,15 +28,13 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class ScreenCaptureService extends Service {
-    private static final String TAG = "ScreenCaptureService";
+public class ScreenshotService extends Service {
+    private static final String TAG = "ScreenshotService";
 
     MediaProjection mediaProjection;
-    MediaRecorder mediaRecorder;
     VirtualDisplay virtualDisplay;
 
     int resultCode;
@@ -45,7 +43,7 @@ public class ScreenCaptureService extends Service {
     private int mScreenHeight;
     private int mScreenDensity;
 
-    public ScreenCaptureService() {
+    public ScreenshotService() {
     }
 
     @Override
@@ -57,7 +55,7 @@ public class ScreenCaptureService extends Service {
 
     private void createNotificationChannel() {
         Notification.Builder builder = new Notification.Builder(this.getApplicationContext()); //获取一个Notification构造器
-        Intent nfIntent = new Intent(this, ScreenCaptureService.class); //点击后跳转的界面，可以设置跳转数据
+        Intent nfIntent = new Intent(this, ScreenshotService.class); //点击后跳转的界面，可以设置跳转数据
 
         builder.setContentIntent(PendingIntent.getActivity(this, 0, nfIntent, PendingIntent.FLAG_IMMUTABLE)) // 设置PendingIntent
                 .setLargeIcon(BitmapFactory.decodeResource(this.getResources(), R.mipmap.ic_launcher)) // 设置下拉列表中的图标(大图标)
@@ -129,43 +127,50 @@ public class ScreenCaptureService extends Service {
         return mediaRecorder;
     }
 
-    /**
-     * 获取VirtualDisplay实例
-     * @return VirtualDisplay instance
-     */
-    private VirtualDisplay createVirtualDisplay() {
-        return mediaProjection.createVirtualDisplay(TAG, mScreenWidth, mScreenHeight, mScreenDensity,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, mediaRecorder.getSurface(), null, null);
+    private Bitmap screenshot() {
+
+        @SuppressLint("WrongConstant") ImageReader imageReader = ImageReader.newInstance(
+                mScreenWidth,
+                mScreenHeight,
+                PixelFormat.RGBA_8888, 1);
+        virtualDisplay = mediaProjection.createVirtualDisplay("screen-mirror",
+                mScreenWidth,
+                mScreenHeight,
+                mScreenDensity,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader.getSurface(), null, null);
+
+        SystemClock.sleep(200);
+        Image image = imageReader.acquireLatestImage();
+        if (image == null) {
+            return null;
+        }
+        Bitmap bitmap = ImageUtils.Image2Bitmap(image, mScreenWidth, mScreenHeight);
+        image.close();
+//        virtualDisplay.release();
+        return bitmap;
     }
 
-    /**
-     * 开始录制屏幕
-     */
-    private void startCapture() {
-        mediaRecorder = createMediaRecorder();
-        virtualDisplay = createVirtualDisplay();
-        mediaRecorder.start();
+    private void saveScreenshot(Bitmap bitmap) {
+        String fileName = null;
+        try {
+            Date currentDate = new Date();
+            SimpleDateFormat date = new SimpleDateFormat("yyyyMMddhhmmss");
+            File dir = getExternalFilesDir(null);
+            fileName = dir.getAbsolutePath() + "/" + date.format(currentDate) + ".png";
+            FileOutputStream fos = new FileOutputStream(fileName);
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+            fos.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
-
-    /**
-     * 结束录制屏幕
-     */
-    public void stopCapture() {
-        mediaRecorder.stop();
-        mediaRecorder.reset();
-    }
-
     @Override
     public void onDestroy() {
         stopForeground(true);
         if (virtualDisplay != null) {
             virtualDisplay.release();
             virtualDisplay = null;
-        }
-        if (mediaRecorder != null) {
-            mediaRecorder.stop();
-            mediaRecorder.release();
-            mediaRecorder = null;
         }
         if (mediaProjection != null) {
             mediaProjection.stop();
@@ -174,13 +179,9 @@ public class ScreenCaptureService extends Service {
         super.onDestroy();
     }
 
-    class ScreenCaptureBinder extends Binder {
-        public void startCapture() {
-            ScreenCaptureService.this.startCapture();
-        }
-
-        public void stopCapture() {
-            ScreenCaptureService.this.stopCapture();
+    class ScreenshotBinder extends Binder {
+        public Bitmap screenshot() {
+            return ScreenshotService.this.screenshot();
         }
 
         public void registerScreenInfo(DisplayMetrics metrics) {
@@ -203,6 +204,6 @@ public class ScreenCaptureService extends Service {
     }
     @Override
     public IBinder onBind(Intent intent) {
-        return new ScreenCaptureBinder();
+        return new ScreenshotBinder();
     }
 }

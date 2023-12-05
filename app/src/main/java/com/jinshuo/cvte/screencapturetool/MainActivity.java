@@ -27,18 +27,23 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String TAG = "ScreenCaptureTool_MAIN";
+    private static final String TAG = "MainActivity";
     private Button btnStartCapture;
     private Button btnStopCapture;
     private Button btnScreenshot;
     private ImageView ivScreenshot;
 
+    private boolean isScreenCaptureServiceConnected = false;
+    private boolean isScreenshotServiceConnected = false;
+
     private ScreenCaptureService.ScreenCaptureBinder screenCaptureBinder;
+    private ScreenshotService.ScreenshotBinder screenshotBinder;
+
     private MediaProjectionManager mediaProjectionManager;
     private static final int SCREEN_CAPTURE_INTENT_REQUEST_CODE = 1000;
     private static final int SCREENSHOT_INTENT_REQUEST_CODE = 1001;
 
-    private static final int SCREEN_CAPTURE_PERMISSION_REQUEST_CODE = 200;
+    private static final int PERMISSION_REQUEST_CODE = 200;
 
     private DisplayMetrics displayMetrics;
 
@@ -46,19 +51,6 @@ public class MainActivity extends AppCompatActivity {
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
             Manifest.permission.READ_EXTERNAL_STORAGE};
-    boolean isUserAuthorized = false;
-
-//    Image screenshot;
-//    private final int SCREENSHOT_READY = 0;
-//    public Handler handler = new Handler(new Handler.Callback() {
-//        @Override
-//        public boolean handleMessage(@NonNull Message message) {
-//            switch (message.what) {
-//                case SCREENSHOT_READY:
-//                    screenshot = screenCaptureBinder.
-//            }
-//        }
-//    });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,7 +58,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         init();
         checkPermissions();
-        connectService();
     }
 
     /**
@@ -76,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             for (String permission : permissions) {
                 if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(this, permissions, SCREEN_CAPTURE_PERMISSION_REQUEST_CODE);
+                    ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE);
                     return;
                 }
             }
@@ -88,7 +79,7 @@ public class MainActivity extends AppCompatActivity {
             grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         System.out.println(TAG + "_onRequestPermissionsResult");
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && requestCode == SCREEN_CAPTURE_PERMISSION_REQUEST_CODE) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && requestCode == PERMISSION_REQUEST_CODE) {
             for (int i = 0; i < permissions.length; i++) {
                 if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
                     return;
@@ -124,26 +115,36 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 绑定到截屏服务
+     * 绑定录屏服务的connection对象
      */
-    private void connectService() {
-        Intent intent = new Intent(this, ScreenCaptureService.class);
-        bindService(intent, serviceConnection, BIND_AUTO_CREATE);
-    }
-
-    /**
-     * 绑定截屏服务的connection对象
-     */
-    private ServiceConnection serviceConnection = new ServiceConnection() {
+    private ServiceConnection screenCaptureServiceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            isScreenCaptureServiceConnected = true;
             screenCaptureBinder = (ScreenCaptureService.ScreenCaptureBinder) iBinder;
             screenCaptureBinder.registerScreenInfo(displayMetrics);
         }
 
         @Override
         public void onServiceDisconnected(ComponentName componentName) {
+            isScreenCaptureServiceConnected = false;
+        }
+    };
 
+    /**
+     * 绑定截屏服务的connection对象
+     */
+    private ServiceConnection screenshotServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            isScreenshotServiceConnected = true;
+            screenshotBinder = (ScreenshotService.ScreenshotBinder) iBinder;
+            screenshotBinder.registerScreenInfo(displayMetrics);
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            isScreenCaptureServiceConnected = false;
         }
     };
 
@@ -151,14 +152,17 @@ public class MainActivity extends AppCompatActivity {
      * 开始录屏
      */
     private void startCaptureScreen() {
+        // 如果还未绑定服务，则先绑定
+        if (!isScreenCaptureServiceConnected) {
+            Intent intent = new Intent(this, ScreenCaptureService.class);
+            bindService(intent, screenCaptureServiceConnection, BIND_AUTO_CREATE);
+        }
+
+        Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
+        startActivityForResult(screenCaptureIntent, SCREEN_CAPTURE_INTENT_REQUEST_CODE);
+
         btnStartCapture.setEnabled(false);
         btnStopCapture.setEnabled(true);
-        if (!isUserAuthorized) {
-            Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
-            startActivityForResult(screenCaptureIntent, SCREEN_CAPTURE_INTENT_REQUEST_CODE);
-        } else {
-            screenCaptureBinder.startCapture();
-        }
         Toast.makeText(this, R.string.start_capture, Toast.LENGTH_SHORT).show();
     }
 
@@ -176,13 +180,14 @@ public class MainActivity extends AppCompatActivity {
      * 截屏
      */
     private void doScreenshot() {
-        if (!isUserAuthorized) {
-            Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
-            startActivityForResult(screenCaptureIntent, SCREENSHOT_INTENT_REQUEST_CODE);
-        } else {
-            Bitmap bitmap = screenCaptureBinder.screenshot();
-            ivScreenshot.setImageBitmap(bitmap);
+        // 如果还未绑定服务，则先绑定
+        if (!isScreenshotServiceConnected) {
+            Intent intent = new Intent(this, ScreenshotService.class);
+            bindService(intent, screenshotServiceConnection, BIND_AUTO_CREATE);
         }
+
+        Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
+        startActivityForResult(screenCaptureIntent, SCREENSHOT_INTENT_REQUEST_CODE);
         Toast.makeText(this, R.string.screenshot, Toast.LENGTH_SHORT).show();
     }
 
@@ -198,7 +203,6 @@ public class MainActivity extends AppCompatActivity {
 
         if(requestCode == SCREEN_CAPTURE_INTENT_REQUEST_CODE) {
             if(resultCode == RESULT_OK) {
-                isUserAuthorized = true;
                 Bundle bundle = new Bundle();
                 bundle.putInt("code", resultCode);
                 bundle.putParcelable("data", data);
@@ -212,13 +216,12 @@ public class MainActivity extends AppCompatActivity {
         }
         if(requestCode == SCREENSHOT_INTENT_REQUEST_CODE) {
             if(resultCode == RESULT_OK) {
-                isUserAuthorized = true;
                 Bundle bundle = new Bundle();
                 bundle.putInt("code", resultCode);
                 bundle.putParcelable("data", data);
-                screenCaptureBinder.registerScreenCaptureRequestInfo(bundle);
-                screenCaptureBinder.prepareCaptureEnviroment();
-                Bitmap bitmap = screenCaptureBinder.screenshot();
+                screenshotBinder.registerScreenCaptureRequestInfo(bundle);
+                screenshotBinder.prepareCaptureEnviroment();
+                Bitmap bitmap = screenshotBinder.screenshot();
                 ivScreenshot.setImageBitmap(bitmap);
                 Log.i(TAG, "screenshot");
             } else {
