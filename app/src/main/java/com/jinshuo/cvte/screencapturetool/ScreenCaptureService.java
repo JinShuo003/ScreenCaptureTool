@@ -5,9 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ServiceInfo;
 import android.graphics.BitmapFactory;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
@@ -17,14 +15,9 @@ import android.media.projection.MediaProjectionManager;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 import android.util.Log;
-import android.view.Surface;
-import android.view.SurfaceView;
-
-import androidx.core.app.NotificationCompat;
 
 import java.io.File;
 import java.io.IOException;
@@ -99,7 +92,6 @@ public class ScreenCaptureService extends Service {
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
         Date curDate = new Date(System.currentTimeMillis());
         String curTime = formatter.format(curDate).replace(" ", "");
-        String videoQuality = "SD";
         File file=new File(getExternalFilesDir("")+"/ScreenCapture");
         if(!file.exists()){
             file.mkdirs();
@@ -110,14 +102,14 @@ public class ScreenCaptureService extends Service {
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
         mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
-        mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);  //after setOutputFormat()
+        mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_WB);  //after setOutputFormat()
         mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);  //after setOutputFormat()
         mediaRecorder.setVideoSize(1080, 1920);  //after setVideoSource(), setOutFormat()
-        mediaRecorder.setVideoFrameRate(30);
+        mediaRecorder.setVideoFrameRate(60);
         mediaRecorder.setOutputFile(file.getAbsolutePath() + "/ScreenCapture_" + curTime + ".mp4");
-        mediaRecorder.setVideoEncodingBitRate(mScreenWidth * mScreenHeight);
-        int bitRate;
-        bitRate = mScreenWidth * mScreenHeight / 1000;
+        int bitRate = 3 * mScreenWidth * mScreenHeight;
+        mediaRecorder.setVideoEncodingBitRate(3 * mScreenWidth * mScreenHeight);
+        Log.d(TAG, "createMediaRecorder: bigRate: " + bitRate);
 
         try {
             mediaRecorder.prepare();
