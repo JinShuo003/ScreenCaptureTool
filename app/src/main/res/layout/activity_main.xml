@@ -35,48 +35,56 @@
     </LinearLayout>
 
     <LinearLayout
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:layout_margin="5dp"
-        android:layout_gravity="center">
-
-        <Button
-            android:id="@+id/start_capture"
-            android:layout_width="wrap_content"
+        android:gravity="center">
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="5dp"
-            android:text="@string/start_capture">
-        </Button>
+            android:gravity="center">
+            <Button
+                android:id="@+id/start_capture"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_margin="5dp"
+                android:text="@string/start_capture">
+            </Button>
+            <Button
+                android:id="@+id/stop_capture"
+                android:enabled="false"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_margin="5dp"
+                android:text="@string/stop_capture">
+            </Button>
+        </LinearLayout>
 
-        <Button
-            android:id="@+id/start_preview"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="5dp"
-            android:enabled="false"
-            android:text="@string/start_capture">
-        </Button>
-
-        <Button
-            android:id="@+id/end_capture"
-            android:enabled="false"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="5dp"
-            android:text="@string/stop_capture">
-        </Button>
-
-        <Button
-            android:id="@+id/screenshot"
-            android:enabled="true"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="5dp"
-            android:text="@string/screenshot">
-        </Button>
-
+            android:gravity="center">
+            <Button
+                android:id="@+id/start_preview"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_margin="5dp"
+                android:enabled="false"
+                android:text="@string/start_preview">
+            </Button>
+            <Button
+                android:id="@+id/screenshot"
+                android:enabled="true"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_margin="5dp"
+                android:text="@string/screenshot">
+            </Button>
+        </LinearLayout>
     </LinearLayout>
-
-
 </LinearLayout>

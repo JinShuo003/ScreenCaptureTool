@@ -22,6 +22,8 @@ import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Surface;
 
+import androidx.annotation.NonNull;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -30,19 +32,19 @@ public class ScreenCaptureService extends Service {
 
     MediaProjection mediaProjection;
     MediaCodec mediaCodec;
-    Surface surface;
     VirtualDisplay virtualDisplay;
-    ByteBuffer bufferData;
+    ByteBuffer outputBuffer;
+    Surface surface;
 
     boolean isRecording = false;
-
-    boolean isRunning = true;
 
     int resultCode;
     Intent data;
     private int mScreenWidth;
     private int mScreenHeight;
     private int mScreenDensity;
+
+    private MainActivity.OnDataReadyListener listener;
 
     public ScreenCaptureService() {
     }
@@ -83,7 +85,6 @@ public class ScreenCaptureService extends Service {
         Notification notification = builder.build(); // 获取构建好的Notification
         notification.defaults = Notification.DEFAULT_SOUND; //设置为默认的声音
         startForeground(110, notification);
-
     }
 
     /**
@@ -102,6 +103,37 @@ public class ScreenCaptureService extends Service {
         isRecording = true;
     }
 
+    /**
+     * MediaCodec异步编码，收到回调时处理数据
+     */
+    MediaCodec.Callback callback = new MediaCodec.Callback() {
+        @Override
+        public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {
+
+        }
+
+        @Override
+        public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
+            Log.d(TAG, "onOutputBufferAvailable: bufferIndex: " + i);
+            outputBuffer = mediaCodec.getOutputBuffer(i);
+            listener.onReady(bufferInfo, outputBuffer);
+            mediaCodec.releaseOutputBuffer(i, false);
+        }
+
+        @Override
+        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {
+
+        }
+
+        @Override
+        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {
+
+        }
+    };
+
+    /**
+     * 开启编码器
+     */
     private void startVideoEncoder() {
         try {
             mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
@@ -109,6 +141,7 @@ public class ScreenCaptureService extends Service {
             e.printStackTrace();
             return;
         }
+        mediaCodec.setCallback(callback);
         MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, mScreenWidth, mScreenHeight);
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         format.setInteger(MediaFormat.KEY_BIT_RATE, mScreenWidth * mScreenHeight);
@@ -123,30 +156,15 @@ public class ScreenCaptureService extends Service {
         virtualDisplay = mediaProjection.createVirtualDisplay(TAG, mScreenWidth, mScreenHeight, mScreenDensity,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null);
         mediaCodec.start();
-        acquireDataThread.start();
     }
-
-    private Thread acquireDataThread = new Thread(new Runnable() {
-        @Override
-        public void run() {
-            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-            while (isRunning) {
-                int outputBufferId = mediaCodec.dequeueOutputBuffer(bufferInfo, 0);
-                if (outputBufferId >= 0) {
-                    bufferData = mediaCodec.getOutputBuffer(outputBufferId);
-                    mediaCodec.releaseOutputBuffer(outputBufferId, false);
-                }
-            }
-        }
-    });
 
     /**
      * 结束录制屏幕
      */
     public void stopCapture() {
-        if (isRecording) {
-
-        }
+        isRecording = false;
+        mediaCodec.stop();
+        mediaCodec.release();
     }
 
     @Override
@@ -197,8 +215,8 @@ public class ScreenCaptureService extends Service {
             mediaProjection = createMediaProjection();
         }
 
-        public ByteBuffer acquireByteBuffer() {
-            return bufferData;
+        public void setOnDataReadyListener(MainActivity.OnDataReadyListener listener) {
+            ScreenCaptureService.this.listener = listener;
         }
     }
     @Override
