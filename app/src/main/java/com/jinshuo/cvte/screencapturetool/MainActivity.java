@@ -34,11 +34,11 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.concurrent.ArrayBlockingQueue;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private Button btnRecordControl;
-    private Button btnPreviewControl;
     private Button btnScreenshot;
     private ImageView ivScreenshot;
     private SurfaceView surfaceView;
@@ -53,24 +53,41 @@ public class MainActivity extends AppCompatActivity {
     MediaFormat mediaFormat;
     MediaCodec.BufferInfo outputBufferInfo;
     ByteBuffer outputBuffer;
+    byte[] outputData;
+
     public interface EncoderStatusListener {
         void onEncoderCreated(MediaFormat format);
+
         void onConfigReady(ByteBuffer configBuffer);
+
         void onDataReady(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer);
     }
+
+    public void putData(byte[] data){
+        if(queue.size()>=MAX_QUEUE_SIZE){
+            queue.poll();
+        }
+        queue.add(data.clone());
+    }
+
     EncoderStatusListener listener = new EncoderStatusListener() {
         @Override
         public void onEncoderCreated(MediaFormat mediaFormat) {
             MainActivity.this.mediaFormat = mediaFormat;
         }
+
         @Override
         public void onConfigReady(ByteBuffer configBuffer) {
             encoderConfigDataBuffer = configBuffer;
         }
+
         @Override
         public void onDataReady(MediaCodec.BufferInfo outputBufferInfo, ByteBuffer outputBuffer) {
             MainActivity.this.outputBufferInfo = outputBufferInfo;
             MainActivity.this.outputBuffer = outputBuffer;
+            outputData = new byte[outputBufferInfo.size];
+            outputBuffer.get(outputData);
+            putData(outputData);
             doSaveVideo();
             doScreenshot();
         }
@@ -112,12 +129,6 @@ public class MainActivity extends AppCompatActivity {
     View.OnClickListener stopRecordOnClickListener = view -> {
         stopRecordScreen();
     };
-    View.OnClickListener startPreviewOnClickListener = view -> {
-        startPreviewScreen();
-    };
-    View.OnClickListener stopPreviewOnClickListener = view -> {
-        stopPreviewScreen();
-    };
     View.OnClickListener screenshotOnClickListener = view -> {
 
     };
@@ -127,7 +138,6 @@ public class MainActivity extends AppCompatActivity {
      */
     private void init() {
         btnRecordControl = findViewById(R.id.btn_record_control);
-        btnPreviewControl = findViewById(R.id.btn_preview_control);
         btnScreenshot = findViewById(R.id.btn_screenshot);
         ivScreenshot = findViewById(R.id.screenshot_image);
         surfaceView = findViewById(R.id.surface);
@@ -137,10 +147,12 @@ public class MainActivity extends AppCompatActivity {
             public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
                 Log.d(TAG, "surfaceCreated: ");
             }
+
             @Override
             public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
                 Log.d(TAG, "surfaceCreated: ");
             }
+
             @Override
             public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
                 Log.d(TAG, "surfaceCreated: ");
@@ -151,7 +163,6 @@ public class MainActivity extends AppCompatActivity {
         initDisplayInfo();
 
         btnRecordControl.setOnClickListener(startRecordOnClickListener);
-        btnPreviewControl.setOnClickListener(startPreviewOnClickListener);
         btnScreenshot.setOnClickListener(screenshotOnClickListener);
     }
 
@@ -232,7 +243,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {
             Log.d(TAG, "onInputBufferAvailable: decoder, inputBuffer: " + i);
-            if (i >= 0) {
+            if (i >= 0 && outputBuffer != null) {
                 ByteBuffer buffer = mediaCodec.getInputBuffer(i);
                 buffer.put(outputBuffer);
                 mediaCodec.queueInputBuffer(i, 0, outputBufferInfo.size, computePresentationTime(i), 0);
@@ -240,32 +251,37 @@ public class MainActivity extends AppCompatActivity {
                 mediaCodec.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
             }
         }
+
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
             Log.d(TAG, "onOutputBufferAvailable: decoder, outputBuffer: " + i);
+            ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(i);
             mediaCodec.releaseOutputBuffer(i, true);
         }
+
         @Override
-        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {}
+        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {
+        }
+
         @Override
-        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {}
+        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {
+        }
     };
 
     private void startPreviewVideoDecoder() {
         try {
-            String mime = mediaFormat.getString(MediaFormat.KEY_MIME);
-            previewDecoder = MediaCodec.createDecoderByType(mime);
-//            previewDecoder = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+//            String mime = mediaFormat.getString(MediaFormat.KEY_MIME);
+//            previewDecoder = MediaCodec.createDecoderByType(mime);
+            previewDecoder = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
         } catch (IOException e) {
             e.printStackTrace();
             return;
         }
-        previewDecoder.setCallback(decoderCallback);
+//        previewDecoder.setCallback(decoderCallback);
 
-//        MediaFormat format = new MediaFormat();
         final MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, displayWidth, displayHeight);
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        format.setInteger(MediaFormat.KEY_BIT_RATE,  displayWidth * displayHeight);
+        format.setInteger(MediaFormat.KEY_BIT_RATE, displayWidth * displayHeight);
         format.setInteger(MediaFormat.KEY_FRAME_RATE, 20);
         format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
 //        format.setByteBuffer("csd-0", encoderConfigDataBuffer);
@@ -288,8 +304,6 @@ public class MainActivity extends AppCompatActivity {
         String curTime = formatter.format(curDate).replace(" ", "");
         String screenCaptureFilename = "ScreenCapture_" + curTime + ".h264";
 
-//        screenCaptureFilename = "test.h264";
-
         File file = new File(outputDirectory, screenCaptureFilename);
         try {
             outputStream = new FileOutputStream(file);
@@ -302,31 +316,34 @@ public class MainActivity extends AppCompatActivity {
      * 开始录屏
      */
     private void startRecordScreen() {
+        initOutputStream();
+
         Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
         startActivityForResult(screenCaptureIntent, SCREEN_CAPTURE_INTENT_REQUEST_CODE);
 
         btnRecordControl.setOnClickListener(stopRecordOnClickListener);
         btnRecordControl.setText(R.string.stop_record);
-        btnPreviewControl.setEnabled(true);
 //        btnRecordControl.setBackground(getDrawable(R.drawable.stop_record_btn_background));
 
-        initOutputStream();
         isRecording = true;
         Toast.makeText(this, R.string.start_record, Toast.LENGTH_LONG).show();
     }
 
+    public void stopDecoderThread(){
+        isRunning =false;
+    }
     /**
      * 结束录屏
      */
     private void stopRecordScreen() {
+        stopDecoderThread();
         screenCaptureBinder.stopCapture();
+        previewDecoder.stop();
+        previewDecoder.release();
 
         btnRecordControl.setOnClickListener(startRecordOnClickListener);
         btnRecordControl.setText(R.string.start_record);
-        if (isPreviewing) {
-            stopPreviewScreen();
-        }
-        btnPreviewControl.setEnabled(false);
+
 //        btnRecordControl.setBackground(getDrawable(R.drawable.start_record_btn_background));
 
         isRecording = false;
@@ -334,41 +351,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 开启预览
-     */
-    private void startPreviewScreen() {
-        btnPreviewControl.setOnClickListener(stopPreviewOnClickListener);
-        btnPreviewControl.setText(R.string.stop_preview);
-        startPreviewVideoDecoder();
-        isPreviewing = true;
-    }
-
-    /**
-     * 关闭预览
-     */
-    private void stopPreviewScreen() {
-        btnPreviewControl.setOnClickListener(startPreviewOnClickListener);
-        btnPreviewControl.setText(R.string.start_preview);
-        isPreviewing = false;
-        previewDecoder.stop();
-    }
-
-    /**
      * 保存文件
      */
     private void doSaveVideo() {
-        Log.d(TAG, "doSaveVideo: buffer.offset: " + outputBufferInfo.size);
-        byte[] outData = new byte[outputBufferInfo.size];
-        outputBuffer.get(outData);
+//        byte[] outData = new byte[outputBufferInfo.size];
+//        outputBuffer.get(outData);
         try {
-            outputStream.write(outData);
+            outputStream.write(outputData);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private long computePresentationTime(long frameIndex){
-        return 132+frameIndex*1000000/20;
+    private long computePresentationTime(long frameIndex) {
+        return 132 + frameIndex * 1000000 / 20;
     }
 
     /**
@@ -382,6 +378,53 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private boolean isRunning = false;
+    private static final int MAX_QUEUE_SIZE = 1000;
+    private ArrayBlockingQueue queue = new ArrayBlockingQueue<>(MAX_QUEUE_SIZE);
+
+
+    public void startDecoderThread() {
+        Thread decoderThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                isRunning = true;
+                byte[] input = null;
+                while (isRunning) {
+                    if (queue.size() > 0) {
+                        input = (byte[]) queue.poll();
+                    }
+                    if (input != null) {
+                        try {
+                            int inputBufferIndex = previewDecoder.dequeueInputBuffer(0);
+                            ByteBuffer inputBuffer;
+                            if (inputBufferIndex >= 0) {
+                                inputBuffer = previewDecoder.getInputBuffer(inputBufferIndex);
+                                inputBuffer.clear();
+                                inputBuffer.put(input, 0, input.length);
+                                previewDecoder.queueInputBuffer(inputBufferIndex, 0, input.length, computePresentationTime(inputBufferIndex), 0);
+                            }
+                            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+                            int outputBufferIndex = previewDecoder.dequeueOutputBuffer(bufferInfo, 0);
+                            while (outputBufferIndex >= 0) {
+                                previewDecoder.releaseOutputBuffer(outputBufferIndex, true);
+                                outputBufferIndex = previewDecoder.dequeueOutputBuffer(bufferInfo, 0);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } else {
+                        try {
+                            Thread.sleep(500);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+        });
+        decoderThread.start();
+    }
+
     /**
      * 接收授权结果
      */
@@ -389,8 +432,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if(requestCode == SCREEN_CAPTURE_INTENT_REQUEST_CODE) {
-            if(resultCode == RESULT_OK) {
+        if (requestCode == SCREEN_CAPTURE_INTENT_REQUEST_CODE) {
+            if (resultCode == RESULT_OK) {
+                startPreviewVideoDecoder();
+                startDecoderThread();
+
                 Bundle bundle = new Bundle();
                 bundle.putInt("code", resultCode);
                 bundle.putParcelable("data", data);
