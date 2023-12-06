@@ -40,51 +40,32 @@
         android:orientation="vertical"
         android:layout_margin="5dp"
         android:gravity="center">
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center">
-            <Button
-                android:id="@+id/start_capture"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_margin="5dp"
-                android:text="@string/start_capture">
-            </Button>
-            <Button
-                android:id="@+id/stop_capture"
-                android:enabled="false"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_margin="5dp"
-                android:text="@string/stop_capture">
-            </Button>
-        </LinearLayout>
 
-        <LinearLayout
+        <Button
+            android:id="@+id/btn_record_control"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center">
-            <Button
-                android:id="@+id/start_preview"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_margin="5dp"
-                android:enabled="false"
-                android:text="@string/start_preview">
-            </Button>
-            <Button
-                android:id="@+id/screenshot"
-                android:enabled="true"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_margin="5dp"
-                android:text="@string/screenshot">
-            </Button>
-        </LinearLayout>
+            android:layout_height="50dp"
+            android:layout_margin="5dp"
+            android:text="@string/start_record">
+        </Button>
+
+        <Button
+            android:id="@+id/btn_preview_control"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_margin="5dp"
+            android:enabled="false"
+            android:text="@string/start_preview">
+        </Button>
+
+        <Button
+            android:id="@+id/btn_screenshot"
+            android:enabled="true"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_margin="5dp"
+            android:text="@string/screenshot">
+        </Button>
+
     </LinearLayout>
 </LinearLayout>

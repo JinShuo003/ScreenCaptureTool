@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
@@ -13,6 +14,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
@@ -35,31 +37,48 @@ import java.util.Date;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
-    private Button btnStartCapture;
-    private Button btnStopCapture;
-    private Button btnStartPreview;
+    private Button btnRecordControl;
+    private Button btnPreviewControl;
     private Button btnScreenshot;
     private ImageView ivScreenshot;
     private SurfaceView surfaceView;
+    private SurfaceHolder surfaceHolder;
+
     private boolean isScreenCaptureServiceConnected = false;
 
     /**
      * 用于接收编码数据的callback
      */
-    public interface OnDataReadyListener {
-        void onReady(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer);
+    ByteBuffer encoderConfigDataBuffer;
+    MediaFormat mediaFormat;
+    MediaCodec.BufferInfo outputBufferInfo;
+    ByteBuffer outputBuffer;
+    public interface EncoderStatusListener {
+        void onEncoderCreated(MediaFormat format);
+        void onConfigReady(ByteBuffer configBuffer);
+        void onDataReady(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer);
     }
-    OnDataReadyListener listener = new OnDataReadyListener() {
+    EncoderStatusListener listener = new EncoderStatusListener() {
         @Override
-        public void onReady(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer) {
-            doSaveVideo(bufferInfo, outputBuffer);
-            doPreview(bufferInfo, outputBuffer);
-            doScreenshot(bufferInfo, outputBuffer);
+        public void onEncoderCreated(MediaFormat mediaFormat) {
+            MainActivity.this.mediaFormat = mediaFormat;
+        }
+        @Override
+        public void onConfigReady(ByteBuffer configBuffer) {
+            encoderConfigDataBuffer = configBuffer;
+        }
+        @Override
+        public void onDataReady(MediaCodec.BufferInfo outputBufferInfo, ByteBuffer outputBuffer) {
+            MainActivity.this.outputBufferInfo = outputBufferInfo;
+            MainActivity.this.outputBuffer = outputBuffer;
+            doSaveVideo();
+            doScreenshot();
         }
     };
     private ScreenCaptureService.ScreenCaptureBinder screenCaptureBinder;
 
     private boolean isRecording = false;
+    private boolean isPreviewing = false;
     private MediaProjectionManager mediaProjectionManager;
     private MediaCodec previewDecoder;
     OutputStream outputStream;
@@ -87,36 +106,52 @@ public class MainActivity extends AppCompatActivity {
         connectService();
     }
 
+    View.OnClickListener startRecordOnClickListener = view -> {
+        startRecordScreen();
+    };
+    View.OnClickListener stopRecordOnClickListener = view -> {
+        stopRecordScreen();
+    };
+    View.OnClickListener startPreviewOnClickListener = view -> {
+        startPreviewScreen();
+    };
+    View.OnClickListener stopPreviewOnClickListener = view -> {
+        stopPreviewScreen();
+    };
+    View.OnClickListener screenshotOnClickListener = view -> {
+
+    };
+
     /**
      * 初始化
      */
     private void init() {
-        btnStartCapture = findViewById(R.id.start_capture);
-        btnStopCapture = findViewById(R.id.stop_capture);
-        btnStartPreview = findViewById(R.id.start_preview);
-        btnScreenshot = findViewById(R.id.screenshot);
+        btnRecordControl = findViewById(R.id.btn_record_control);
+        btnPreviewControl = findViewById(R.id.btn_preview_control);
+        btnScreenshot = findViewById(R.id.btn_screenshot);
         ivScreenshot = findViewById(R.id.screenshot_image);
         surfaceView = findViewById(R.id.surface);
+        surfaceHolder = surfaceView.getHolder();
+        surfaceHolder.addCallback(new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
+                Log.d(TAG, "surfaceCreated: ");
+            }
+            @Override
+            public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
+                Log.d(TAG, "surfaceCreated: ");
+            }
+            @Override
+            public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
+                Log.d(TAG, "surfaceCreated: ");
+            }
+        });
 
         mediaProjectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
         initDisplayInfo();
 
-        View.OnClickListener startCaptureOnClickListener = view -> {
-            startCaptureScreen();
-        };
-        View.OnClickListener endCaptureOnClickListener = view -> {
-            stopCaptureScreen();
-        };
-        View.OnClickListener startPreviewOnClickListener = view -> {
-            startPreview();
-        };
-        View.OnClickListener screenshotOnClickListener = view -> {
-//            doScreenshot();
-        };
-
-        btnStartCapture.setOnClickListener(startCaptureOnClickListener);
-        btnStopCapture.setOnClickListener(endCaptureOnClickListener);
-        btnStartPreview.setOnClickListener(startPreviewOnClickListener);
+        btnRecordControl.setOnClickListener(startRecordOnClickListener);
+        btnPreviewControl.setOnClickListener(startPreviewOnClickListener);
         btnScreenshot.setOnClickListener(screenshotOnClickListener);
     }
 
@@ -128,6 +163,7 @@ public class MainActivity extends AppCompatActivity {
 //        displayHeight = displayMetrics.heightPixels;
         displayDensity = displayMetrics.densityDpi;
     }
+
     /**
      * 绑定到录屏服务
      */
@@ -137,6 +173,7 @@ public class MainActivity extends AppCompatActivity {
             bindService(intent, screenCaptureServiceConnection, BIND_AUTO_CREATE);
         }
     }
+
     /**
      * 检查权限情况
      */
@@ -178,7 +215,8 @@ public class MainActivity extends AppCompatActivity {
             isScreenCaptureServiceConnected = true;
             screenCaptureBinder = (ScreenCaptureService.ScreenCaptureBinder) iBinder;
             screenCaptureBinder.registerScreenInfo(displayMetrics);
-            screenCaptureBinder.setOnDataReadyListener(listener);
+            screenCaptureBinder.setEncoderStatusListener(listener);
+
         }
 
         @Override
@@ -187,26 +225,52 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    /**
+     * 异步解码，Input可用时写入最新的h264数据，Output可用时渲染到Surface上
+     */
+    MediaCodec.Callback decoderCallback = new MediaCodec.Callback() {
+        @Override
+        public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {
+            Log.d(TAG, "onInputBufferAvailable: decoder, inputBuffer: " + i);
+            if (i >= 0) {
+                ByteBuffer buffer = mediaCodec.getInputBuffer(i);
+                buffer.put(outputBuffer);
+                mediaCodec.queueInputBuffer(i, 0, outputBufferInfo.size, computePresentationTime(i), 0);
+            } else {
+                mediaCodec.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+            }
+        }
+        @Override
+        public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
+            Log.d(TAG, "onOutputBufferAvailable: decoder, outputBuffer: " + i);
+            mediaCodec.releaseOutputBuffer(i, true);
+        }
+        @Override
+        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {}
+        @Override
+        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {}
+    };
+
     private void startPreviewVideoDecoder() {
         try {
-            previewDecoder = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+            String mime = mediaFormat.getString(MediaFormat.KEY_MIME);
+            previewDecoder = MediaCodec.createDecoderByType(mime);
+//            previewDecoder = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
         } catch (IOException e) {
             e.printStackTrace();
             return;
         }
+        previewDecoder.setCallback(decoderCallback);
+
+//        MediaFormat format = new MediaFormat();
         final MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, displayWidth, displayHeight);
+        format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         format.setInteger(MediaFormat.KEY_BIT_RATE,  displayWidth * displayHeight);
-        format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
+        format.setInteger(MediaFormat.KEY_FRAME_RATE, 20);
         format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
-//        //横屏
-//        byte[] header_sps = {0, 0, 0, 1, 103, 66, -128, 31, -38, 1, 64, 22, -24, 6, -48, -95, 53};
-//        byte[] header_pps = {0, 0 ,0, 1, 104, -50, 6, -30};
-        //竖屏
-        byte[] header_sps = {0, 0, 0, 1, 103, 66, -128, 31, -38, 2, -48, 40, 104, 6, -48, -95, 53};
-        byte[] header_pps = {0, 0 ,0, 1, 104, -50, 6, -30};
-        format.setByteBuffer("csd-0", ByteBuffer.wrap(header_sps));
-        format.setByteBuffer("csd-1", ByteBuffer.wrap(header_pps));
-        previewDecoder.configure(format, surfaceView.getHolder().getSurface(), null, 0);//mSurface对应需要展示surfaceview的surface
+//        format.setByteBuffer("csd-0", encoderConfigDataBuffer);
+
+        previewDecoder.configure(format, surfaceHolder.getSurface(), null, 0);
         previewDecoder.start();
     }
 
@@ -237,46 +301,64 @@ public class MainActivity extends AppCompatActivity {
     /**
      * 开始录屏
      */
-    private void startCaptureScreen() {
+    private void startRecordScreen() {
         Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
         startActivityForResult(screenCaptureIntent, SCREEN_CAPTURE_INTENT_REQUEST_CODE);
 
-        btnStartCapture.setEnabled(false);
-        btnStopCapture.setEnabled(true);
-        btnStartPreview.setEnabled(true);
+        btnRecordControl.setOnClickListener(stopRecordOnClickListener);
+        btnRecordControl.setText(R.string.stop_record);
+        btnPreviewControl.setEnabled(true);
+//        btnRecordControl.setBackground(getDrawable(R.drawable.stop_record_btn_background));
 
         initOutputStream();
         isRecording = true;
-        Toast.makeText(this, R.string.start_capture, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.start_record, Toast.LENGTH_LONG).show();
     }
 
     /**
      * 结束录屏
      */
-    private void stopCaptureScreen() {
+    private void stopRecordScreen() {
         screenCaptureBinder.stopCapture();
 
-        btnStartCapture.setEnabled(true);
-        btnStopCapture.setEnabled(false);
-        btnStartPreview.setEnabled(false);
+        btnRecordControl.setOnClickListener(startRecordOnClickListener);
+        btnRecordControl.setText(R.string.start_record);
+        if (isPreviewing) {
+            stopPreviewScreen();
+        }
+        btnPreviewControl.setEnabled(false);
+//        btnRecordControl.setBackground(getDrawable(R.drawable.start_record_btn_background));
 
         isRecording = false;
-        Toast.makeText(this, R.string.stop_capture, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.start_record, Toast.LENGTH_SHORT).show();
     }
 
     /**
      * 开启预览
      */
-    private void startPreview() {
+    private void startPreviewScreen() {
+        btnPreviewControl.setOnClickListener(stopPreviewOnClickListener);
+        btnPreviewControl.setText(R.string.stop_preview);
+        startPreviewVideoDecoder();
+        isPreviewing = true;
+    }
 
+    /**
+     * 关闭预览
+     */
+    private void stopPreviewScreen() {
+        btnPreviewControl.setOnClickListener(startPreviewOnClickListener);
+        btnPreviewControl.setText(R.string.start_preview);
+        isPreviewing = false;
+        previewDecoder.stop();
     }
 
     /**
      * 保存文件
      */
-    private void doSaveVideo(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer) {
-        Log.d(TAG, "doSaveVideo: buffer.offset: " + bufferInfo.offset);
-        byte[] outData = new byte[bufferInfo.size];
+    private void doSaveVideo() {
+        Log.d(TAG, "doSaveVideo: buffer.offset: " + outputBufferInfo.size);
+        byte[] outData = new byte[outputBufferInfo.size];
         outputBuffer.get(outData);
         try {
             outputStream.write(outData);
@@ -284,17 +366,15 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-    /**
-     * 预览
-     */
-    private void doPreview(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer) {
 
+    private long computePresentationTime(long frameIndex){
+        return 132+frameIndex*1000000/20;
     }
 
     /**
      * 截屏
      */
-    private void doScreenshot(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer) {
+    private void doScreenshot() {
         if (!isRecording) {
 
         } else {

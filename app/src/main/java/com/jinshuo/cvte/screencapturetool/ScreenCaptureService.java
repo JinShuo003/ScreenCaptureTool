@@ -31,6 +31,7 @@ public class ScreenCaptureService extends Service {
     private static final String TAG = "ScreenCaptureService";
 
     MediaProjection mediaProjection;
+    MediaFormat format;
     MediaCodec mediaCodec;
     VirtualDisplay virtualDisplay;
     ByteBuffer outputBuffer;
@@ -44,7 +45,7 @@ public class ScreenCaptureService extends Service {
     private int mScreenHeight;
     private int mScreenDensity;
 
-    private MainActivity.OnDataReadyListener listener;
+    private MainActivity.EncoderStatusListener encoderStatusListener;
 
     public ScreenCaptureService() {
     }
@@ -104,31 +105,32 @@ public class ScreenCaptureService extends Service {
     }
 
     /**
-     * MediaCodec异步编码，收到回调时处理数据
+     * 异步编码，Output可用时发起数据可用的通知
      */
-    MediaCodec.Callback callback = new MediaCodec.Callback() {
+    MediaCodec.Callback encoderCallback = new MediaCodec.Callback() {
         @Override
-        public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {
-
-        }
+        public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {}
 
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
             Log.d(TAG, "onOutputBufferAvailable: bufferIndex: " + i);
-            outputBuffer = mediaCodec.getOutputBuffer(i);
-            listener.onReady(bufferInfo, outputBuffer);
-            mediaCodec.releaseOutputBuffer(i, false);
+            if (i >= 0) {
+                outputBuffer = mediaCodec.getOutputBuffer(i);
+                if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
+                    encoderStatusListener.onConfigReady(outputBuffer);
+                }
+                encoderStatusListener.onDataReady(bufferInfo, outputBuffer);
+                mediaCodec.releaseOutputBuffer(i, false);
+            } else {
+                Log.d(TAG, "onOutputBufferAvailable: outputBuffer index < 0");
+            }
         }
 
         @Override
-        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {
-
-        }
+        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {}
 
         @Override
-        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {
-
-        }
+        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {}
     };
 
     /**
@@ -141,8 +143,8 @@ public class ScreenCaptureService extends Service {
             e.printStackTrace();
             return;
         }
-        mediaCodec.setCallback(callback);
-        MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, mScreenWidth, mScreenHeight);
+        mediaCodec.setCallback(encoderCallback);
+        format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, mScreenWidth, mScreenHeight);
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         format.setInteger(MediaFormat.KEY_BIT_RATE, mScreenWidth * mScreenHeight);
         format.setInteger(MediaFormat.KEY_FRAME_RATE, 20);
@@ -152,6 +154,7 @@ public class ScreenCaptureService extends Service {
                 null,
                 null,
                 MediaCodec.CONFIGURE_FLAG_ENCODE);
+        encoderStatusListener.onEncoderCreated(format);
         surface = mediaCodec.createInputSurface();
         virtualDisplay = mediaProjection.createVirtualDisplay(TAG, mScreenWidth, mScreenHeight, mScreenDensity,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null);
@@ -215,8 +218,8 @@ public class ScreenCaptureService extends Service {
             mediaProjection = createMediaProjection();
         }
 
-        public void setOnDataReadyListener(MainActivity.OnDataReadyListener listener) {
-            ScreenCaptureService.this.listener = listener;
+        public void setEncoderStatusListener(MainActivity.EncoderStatusListener listener) {
+            ScreenCaptureService.this.encoderStatusListener = listener;
         }
     }
     @Override
