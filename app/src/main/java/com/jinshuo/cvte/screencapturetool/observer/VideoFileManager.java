@@ -1,20 +1,15 @@
 package com.jinshuo.cvte.screencapturetool.observer;
 
-import android.app.Application;
-import android.content.Context;
-import android.os.Environment;
 import android.util.Log;
 
 import com.jinshuo.cvte.screencapturetool.ScreenCaptureApplication;
-import com.jinshuo.cvte.screencapturetool.utils.StorageUtils;
 import com.jinshuo.cvte.screencapturetool.observerInterface.FrameDataObserver;
+import com.jinshuo.cvte.screencapturetool.utils.StorageUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 public class VideoFileManager implements FrameDataObserver {
     private static final String TAG = "VideoFileManager";
@@ -44,14 +39,10 @@ public class VideoFileManager implements FrameDataObserver {
         String outputDirectory = ScreenCaptureApplication.getInstance().getExternalFilesDir("") + "/ScreenCapture";
         StorageUtils.makeDirectory(outputDirectory);
 
-        // 创建h264文件
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
-        Date curDate = new Date(System.currentTimeMillis());
-        String curTime = formatter.format(curDate).replace(" ", "");
-        String screenCaptureFilename = "ScreenCapture_" + curTime + ".h264";
+        String filename = StorageUtils.generateFilename("ScreenCapture") + ".h264";
 
         // 创建文件输出流
-        File file = new File(outputDirectory, screenCaptureFilename);
+        File file = new File(outputDirectory, filename);
         try {
             outputStream = new FileOutputStream(file);
         } catch (Exception e) {

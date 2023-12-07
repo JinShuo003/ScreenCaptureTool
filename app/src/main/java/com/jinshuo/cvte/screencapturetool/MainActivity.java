@@ -164,7 +164,7 @@ public class MainActivity extends AppCompatActivity {
         btnRecordControl.setOnClickListener(startRecordOnClickListener);
         btnScreenshot.setOnClickListener(screenshotOnClickListener);
 
-        consumer.registerBuffer(frameQueue);
+        consumer.setBuffer(frameQueue);
 
         previewManager.registerPreviewInfo(displayWidth, displayHeight, surfaceHolder.getSurface());
     }
@@ -301,13 +301,27 @@ public class MainActivity extends AppCompatActivity {
      * 截屏，如果当前正在录屏则将ScreenshotManager注册为观察者，从数据中截取一帧并保存
      * 如果当前不在录屏，则开启MediaProjection+ImageReader
      */
+    public interface OnScreenshotReadyListener {
+        void onScreenshotReady(Bitmap screenshot);
+    }
+    OnScreenshotReadyListener onScreenshotReadyListener = new OnScreenshotReadyListener() {
+        @Override
+        public void onScreenshotReady(Bitmap screenshot) {
+            screenshotManager.saveImage(screenshot);
+        }
+    };
     private void screenshot() {
         if (isRecording) {
-
+            View v = getWindow().getDecorView();
+            Bitmap screenshot = Bitmap.createBitmap(v.getWidth(), v.getHeight(), Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas();
+            canvas.setBitmap(screenshot);
+            v.draw(canvas);
+            ivScreenshot.setImageBitmap(screenshot);
+            onScreenshotReadyListener.onScreenshotReady(screenshot);
         } else {
             Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
             startActivityForResult(screenCaptureIntent, SCREENSHOT_INTENT_REQUEST_CODE);
-
         }
     }
 
@@ -345,8 +359,9 @@ public class MainActivity extends AppCompatActivity {
             Log.i(TAG, "Started screen recording");
         }
         if (requestCode == SCREENSHOT_INTENT_REQUEST_CODE) {
-            Bitmap bitmap = screenCaptureBinder.screenshot(bundle);
-            ivScreenshot.setImageBitmap(bitmap);
+            Bitmap screenshot = screenCaptureBinder.screenshot(bundle);
+            ivScreenshot.setImageBitmap(screenshot);
+            onScreenshotReadyListener.onScreenshotReady(screenshot);
         }
     }
 }

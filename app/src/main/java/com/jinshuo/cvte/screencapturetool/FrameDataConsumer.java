@@ -52,12 +52,9 @@ public class FrameDataConsumer implements FrameDataPublisher {
      * 注册缓冲区
      * @param frameQueue
      */
-    public void registerBuffer(TransferQueue frameQueue) {
+    public void setBuffer(TransferQueue frameQueue) {
         this.frameQueue = frameQueue;
     }
-
-
-
 
     @Override
     public void addObserver(FrameDataObserver observer) {
