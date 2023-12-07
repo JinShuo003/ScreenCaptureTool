@@ -112,7 +112,14 @@ public class ScreenCaptureService extends Service {
      */
     private void startCapture(Bundle bundle) {
         prepareMediaProjection(bundle);
-        startVideoEncoder();
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Log.d(TAG, "run: ThreadId: " + Thread.currentThread().getId());
+                startVideoEncoder();
+            }
+        });
+        thread.start();
         isRecording = true;
     }
 
@@ -127,6 +134,7 @@ public class ScreenCaptureService extends Service {
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
             if (i >= 0) {
+                Log.d(TAG, "onOutputBufferAvailable: ThreadId: " + Thread.currentThread().getId());
                 outputBuffer = mediaCodec.getOutputBuffer(i);
                 if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
                     encoderStatusListener.onConfigReady(outputBuffer);
@@ -173,6 +181,7 @@ public class ScreenCaptureService extends Service {
         virtualDisplay = mediaProjection.createVirtualDisplay(TAG, mScreenWidth, mScreenHeight, mScreenDensity,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null);
         mediaCodec.start();
+        Log.d(TAG, "startVideoEncoder: ThreadId: " + Thread.currentThread().getId());
     }
 
     /**

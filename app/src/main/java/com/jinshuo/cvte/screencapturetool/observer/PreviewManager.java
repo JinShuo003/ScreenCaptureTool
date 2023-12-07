@@ -6,12 +6,10 @@ import android.media.MediaFormat;
 import android.util.Log;
 import android.view.Surface;
 
-import com.jinshuo.cvte.screencapturetool.observerInterface.FrameDataObserver;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public class PreviewManager implements FrameDataObserver {
+public class PreviewManager implements VideoStreamObserver {
     private static final String TAG = "PreviewManager";
     private MediaCodec previewDecoder;
 
@@ -57,6 +55,7 @@ public class PreviewManager implements FrameDataObserver {
      * 保存文件
      */
     private void doDecodeFrame(byte[] frameData) {
+        Log.d(TAG, "doDecodeFrame: ThreadId: " + Thread.currentThread().getId());
         try {
             int inputBufferIndex = previewDecoder.dequeueInputBuffer(0);
             ByteBuffer inputBuffer;

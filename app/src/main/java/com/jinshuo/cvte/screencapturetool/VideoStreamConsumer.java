@@ -2,17 +2,17 @@ package com.jinshuo.cvte.screencapturetool;
 
 import android.util.Log;
 
-import com.jinshuo.cvte.screencapturetool.observerInterface.FrameDataObserver;
-import com.jinshuo.cvte.screencapturetool.observerInterface.FrameDataPublisher;
+import com.jinshuo.cvte.screencapturetool.observer.VideoStreamObserver;
+import com.jinshuo.cvte.screencapturetool.observerInterface.VideoStreamPublisher;
 
 import java.util.HashSet;
 import java.util.concurrent.TransferQueue;
 
-public class FrameDataConsumer implements FrameDataPublisher {
+public class VideoStreamConsumer implements VideoStreamPublisher {
     private static final String TAG = "FrameDataComsumer";
     boolean allowWork = true;
     TransferQueue frameQueue;
-    HashSet<FrameDataObserver> observerSet = new HashSet<>();
+    HashSet<VideoStreamObserver> observerSet = new HashSet<>();
 
     /**
      * 开启线程
@@ -59,32 +59,32 @@ public class FrameDataConsumer implements FrameDataPublisher {
     }
 
     @Override
-    public void addObserver(FrameDataObserver observer) {
+    public void addObserver(VideoStreamObserver observer) {
         observerSet.add(observer);
     }
 
     @Override
-    public void removeObserver(FrameDataObserver observer) {
+    public void removeObserver(VideoStreamObserver observer) {
         observerSet.remove(observer);
     }
 
     @Override
     public void notifyStart() {
-        for (FrameDataObserver observer: observerSet) {
+        for (VideoStreamObserver observer: observerSet) {
             observer.start();
         }
     }
 
     @Override
     public void notifyDataReady(byte[] data) {
-        for (FrameDataObserver observer: observerSet) {
+        for (VideoStreamObserver observer: observerSet) {
             observer.update(data);
         }
     }
 
     @Override
     public void notifyStop() {
-        for (FrameDataObserver observer: observerSet) {
+        for (VideoStreamObserver observer: observerSet) {
             observer.stop();
         }
     }

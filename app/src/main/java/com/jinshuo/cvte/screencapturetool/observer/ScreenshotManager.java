@@ -4,14 +4,13 @@ import android.graphics.Bitmap;
 
 import com.jinshuo.cvte.screencapturetool.MainActivity;
 import com.jinshuo.cvte.screencapturetool.ScreenCaptureApplication;
-import com.jinshuo.cvte.screencapturetool.observerInterface.FrameDataObserver;
 import com.jinshuo.cvte.screencapturetool.utils.StorageUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
-public class ScreenshotManager implements FrameDataObserver {
+public class ScreenshotManager implements VideoStreamObserver {
     private static final String TAG = "ScreenshotManager";
     byte[] latestFrame;
 

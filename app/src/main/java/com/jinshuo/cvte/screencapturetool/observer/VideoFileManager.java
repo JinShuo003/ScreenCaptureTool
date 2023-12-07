@@ -3,7 +3,6 @@ package com.jinshuo.cvte.screencapturetool.observer;
 import android.util.Log;
 
 import com.jinshuo.cvte.screencapturetool.ScreenCaptureApplication;
-import com.jinshuo.cvte.screencapturetool.observerInterface.FrameDataObserver;
 import com.jinshuo.cvte.screencapturetool.utils.StorageUtils;
 
 import java.io.File;
@@ -11,7 +10,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-public class VideoFileManager implements FrameDataObserver {
+public class VideoFileManager implements VideoStreamObserver {
     private static final String TAG = "VideoFileManager";
     OutputStream outputStream;
 

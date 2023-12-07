@@ -62,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private TransferQueue frameQueue = new LinkedTransferQueue<>();
     // 消费者，负责消费解码出的数据
-    FrameDataConsumer consumer = new FrameDataConsumer();
+    VideoStreamConsumer consumer = new VideoStreamConsumer();
     VideoFileManager videoFileManager = new VideoFileManager();
     PreviewManager previewManager = new PreviewManager();
     ScreenshotManager screenshotManager = new ScreenshotManager();
@@ -120,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Log.d(TAG, "onCreate: MainThreadId: " + Thread.currentThread().getId());
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         init();
