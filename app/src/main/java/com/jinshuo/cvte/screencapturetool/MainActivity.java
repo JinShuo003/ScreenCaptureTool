@@ -21,7 +21,9 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -33,6 +35,7 @@ import androidx.core.content.ContextCompat;
 import com.jinshuo.cvte.screencapturetool.observer.PreviewManager;
 import com.jinshuo.cvte.screencapturetool.observer.ScreenshotManager;
 import com.jinshuo.cvte.screencapturetool.observer.VideoFileManager;
+import com.jinshuo.cvte.screencapturetool.utils.LengthUtils;
 import com.jinshuo.cvte.screencapturetool.utils.ScreenUtils;
 
 import java.nio.ByteBuffer;
@@ -132,6 +135,28 @@ public class MainActivity extends AppCompatActivity {
         screenshot();
     };
 
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        LinearLayout display_layout = findViewById(R.id.display_layout);
+        int width = display_layout.getWidth()/2-LengthUtils.dp2px(this, 10);
+        int height = (int)(width*1.77);
+
+        FrameLayout surfaceLayout = findViewById(R.id.surface_layout);
+        FrameLayout imageLayout = findViewById(R.id.image_layout);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(width, height);
+        int margin = LengthUtils.dp2px(this, 5);
+        layoutParams.setMargins(margin, margin, margin, margin);
+
+        surfaceLayout.setLayoutParams(layoutParams);
+        imageLayout.setLayoutParams(layoutParams);
+
+        int padding = LengthUtils.dp2px(this, 5);
+        surfaceLayout.setPadding(padding, padding, padding, padding);
+        imageLayout.setPadding(padding, padding, padding, padding);
+
+    }
+
     /**
      * 初始化
      */
@@ -141,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
         ivScreenshot = findViewById(R.id.screenshot_image);
         surfaceView = findViewById(R.id.surface);
         surfaceHolder = surfaceView.getHolder();
+
         surfaceHolder.addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
@@ -276,10 +302,6 @@ public class MainActivity extends AppCompatActivity {
     private void startRecordScreen() {
         Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
         startActivityForResult(screenCaptureIntent, SCREEN_CAPTURE_INTENT_REQUEST_CODE);
-
-        btnRecordControl.setOnClickListener(stopRecordOnClickListener);
-        btnRecordControl.setText(R.string.stop_record);
-        Toast.makeText(this, R.string.start_record, Toast.LENGTH_LONG).show();
     }
 
     /**
@@ -343,6 +365,7 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK) {
             Log.i(TAG, "onActivityResult: user denied");
+            return;
         }
 
         Bundle bundle = new Bundle();
@@ -355,6 +378,10 @@ public class MainActivity extends AppCompatActivity {
             consumer.startConsume();
             clearSurface();
             screenCaptureBinder.startCapture(bundle);
+
+            btnRecordControl.setOnClickListener(stopRecordOnClickListener);
+            btnRecordControl.setText(R.string.stop_record);
+            Toast.makeText(this, R.string.start_record, Toast.LENGTH_LONG).show();
             isRecording = true;
             Log.i(TAG, "Started screen recording");
         }

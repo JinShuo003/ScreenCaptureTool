@@ -6,31 +6,44 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="bottom"
+    android:background="@color/gray_FFCCCCCC"
     tools:context=".MainActivity">
     
     <LinearLayout
+        android:id="@+id/display_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_margin="5dp"
-        android:orientation="horizontal">
-
-        <SurfaceView
-            android:id="@+id/surface"
+        android:orientation="horizontal"
+        android:gravity="center">
+        <FrameLayout
+            android:id="@+id/surface_layout"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:layout_margin="5dp">
-        </SurfaceView>
+            android:layout_height="wrap_content"
+            android:background="@color/gray_FFAAAAAA"
+            android:layout_gravity="center">
+            <SurfaceView
+                android:id="@+id/surface"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+            </SurfaceView>
+        </FrameLayout>
 
-        <ImageView
-            android:id="@+id/screenshot_image"
+        <FrameLayout
+            android:id="@+id/image_layout"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:layout_margin="5dp"
-            android:background="@color/black">
-        </ImageView>
+            android:layout_height="wrap_content"
+            android:background="@color/gray_FFAAAAAA"
+            android:layout_gravity="center">
+            <ImageView
+                android:id="@+id/screenshot_image"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/black_FF000000">
+            </ImageView>
+        </FrameLayout>
 
     </LinearLayout>
 
@@ -38,24 +51,35 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_margin="5dp"
-        android:gravity="center">
+        android:layout_marginLeft="30dp"
+        android:layout_marginRight="30dp"
+        android:gravity="center"
+        android:paddingBottom="40dp">
 
         <Button
             android:id="@+id/btn_record_control"
+            app:backgroundTint="@null"
             android:layout_width="match_parent"
             android:layout_height="50dp"
-            android:layout_margin="5dp"
-            android:text="@string/start_record">
+            android:layout_marginBottom="20dp"
+            android:text="@string/start_record"
+            android:textColor="@color/black_FF000000"
+            android:textStyle="bold"
+            android:textSize="20dp"
+            android:background="@drawable/start_record_btn_background">
         </Button>
 
         <Button
             android:id="@+id/btn_screenshot"
+            app:backgroundTint="@null"
             android:enabled="true"
             android:layout_width="match_parent"
             android:layout_height="50dp"
-            android:layout_margin="5dp"
-            android:text="@string/screenshot">
+            android:text="@string/screenshot"
+            android:textColor="@color/black_FF000000"
+            android:textStyle="bold"
+            android:textSize="20dp"
+            android:background="@drawable/screenshot_btn_background">
         </Button>
 
     </LinearLayout>
