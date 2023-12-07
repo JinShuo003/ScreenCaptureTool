@@ -3,7 +3,10 @@
     <color name="black_FF000000">#FF000000</color>
     <color name="white_FFFFFFFF">#FFFFFFFF</color>
     <color name="red_FFFF0000">#FFFF0000</color>
-    <color name="green_FF00FF00">#FF00FF00</color>
+    <color name="start_record">#FF55AA55</color>
+    <color name="stop_record">#FFAA5555</color>
+    <color name="clear_surface">#FFAAAA55</color>
+    <color name="take_sceneshot">#FF5555FF</color>
     <color name="gray_FFCCCCCC">#FFCCCCCC</color>
     <color name="gray_FFAAAAAA">#FFAAAAAA</color>
 

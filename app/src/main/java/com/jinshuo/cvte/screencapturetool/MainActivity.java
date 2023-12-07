@@ -9,6 +9,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
+import android.graphics.SurfaceTexture;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.media.projection.MediaProjectionManager;
@@ -17,8 +18,8 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 import android.util.Log;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
+import android.view.Surface;
+import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -45,10 +46,11 @@ import java.util.concurrent.TransferQueue;
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private Button btnRecordControl;
+//    private Button btnClearPreview;
     private Button btnScreenshot;
     private ImageView ivScreenshot;
-    private SurfaceView surfaceView;
-    private SurfaceHolder surfaceHolder;
+    private TextureView textureView;
+    private Surface surface;
 
     private boolean isScreenCaptureServiceConnected = false;
     private boolean isRecording = false;
@@ -131,6 +133,9 @@ public class MainActivity extends AppCompatActivity {
     View.OnClickListener stopRecordOnClickListener = view -> {
         stopRecordScreen();
     };
+    View.OnClickListener clearPreviewOnClickListener = view -> {
+        clearPreview();
+    };
     View.OnClickListener screenshotOnClickListener = view -> {
         screenshot();
     };
@@ -142,7 +147,7 @@ public class MainActivity extends AppCompatActivity {
         int width = display_layout.getWidth()/2-LengthUtils.dp2px(this, 10);
         int height = (int)(width*1.77);
 
-        FrameLayout surfaceLayout = findViewById(R.id.surface_layout);
+        FrameLayout surfaceLayout = findViewById(R.id.texture_layout);
         FrameLayout imageLayout = findViewById(R.id.image_layout);
         LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(width, height);
         int margin = LengthUtils.dp2px(this, 5);
@@ -162,25 +167,33 @@ public class MainActivity extends AppCompatActivity {
      */
     private void init() {
         btnRecordControl = findViewById(R.id.btn_record_control);
+//        btnClearPreview = findViewById(R.id.btn_clear_surface);
         btnScreenshot = findViewById(R.id.btn_screenshot);
         ivScreenshot = findViewById(R.id.screenshot_image);
-        surfaceView = findViewById(R.id.surface);
-        surfaceHolder = surfaceView.getHolder();
-
-        surfaceHolder.addCallback(new SurfaceHolder.Callback() {
+        textureView = findViewById(R.id.textureView);
+        textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override
-            public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
-                Log.d(TAG, "surfaceCreated: ");
+            public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surfaceTexture, int i, int i1) {
+                Log.d(TAG, "onSurfaceTextureAvailable: ");
+                surface = new Surface(surfaceTexture);
+                previewManager.registerPreviewInfo(displayWidth, displayHeight, surface);
+
             }
 
             @Override
-            public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
-                Log.d(TAG, "surfaceChanged: ");
+            public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture surfaceTexture, int i, int i1) {
+                Log.d(TAG, "onSurfaceTextureSizeChanged: ");
             }
 
             @Override
-            public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
-                Log.d(TAG, "surfaceDestroyed: ");
+            public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surfaceTexture) {
+                Log.d(TAG, "onSurfaceTextureDestroyed: ");
+                return false;
+            }
+
+            @Override
+            public void onSurfaceTextureUpdated(@NonNull SurfaceTexture surfaceTexture) {
+
             }
         });
 
@@ -188,11 +201,10 @@ public class MainActivity extends AppCompatActivity {
         initDisplayInfo();
 
         btnRecordControl.setOnClickListener(startRecordOnClickListener);
+//        btnClearPreview.setOnClickListener(clearPreviewOnClickListener);
         btnScreenshot.setOnClickListener(screenshotOnClickListener);
 
         consumer.setBuffer(frameQueue);
-
-        previewManager.registerPreviewInfo(displayWidth, displayHeight, surfaceHolder.getSurface());
     }
 
     private void initDisplayInfo() {
@@ -315,8 +327,20 @@ public class MainActivity extends AppCompatActivity {
 
         btnRecordControl.setOnClickListener(startRecordOnClickListener);
         btnRecordControl.setText(R.string.start_record);
+        btnRecordControl.setBackground(getDrawable(R.drawable.start_record_btn_background));
+
+//        btnClearPreview.setEnabled(true);
+//        btnClearPreview.setBackground(getDrawable(R.drawable.clear_surface_btn_background));
+
         isRecording = false;
         Toast.makeText(this, R.string.stop_record, Toast.LENGTH_LONG).show();
+    }
+
+    private void clearPreview() {
+        Canvas canvas = textureView.lockCanvas();
+        canvas.drawColor(getResources().getColor(R.color.black_FF000000));
+        textureView.unlockCanvasAndPost(canvas);
+        ivScreenshot.setImageDrawable(getDrawable(R.drawable.screenshot_preview_background));
     }
 
     /**
@@ -351,7 +375,7 @@ public class MainActivity extends AppCompatActivity {
      * 清空预览画布
      */
     private void clearSurface() {
-        Canvas canvas = surfaceHolder.lockCanvas();
+        Canvas canvas = textureView.lockCanvas();
         if (null != canvas) {
             canvas.drawColor(Color.BLACK, PorterDuff.Mode.CLEAR);
         }
@@ -381,6 +405,11 @@ public class MainActivity extends AppCompatActivity {
 
             btnRecordControl.setOnClickListener(stopRecordOnClickListener);
             btnRecordControl.setText(R.string.stop_record);
+            btnRecordControl.setBackground(getDrawable(R.drawable.stop_record_btn_background));
+
+//            btnClearPreview.setEnabled(false);
+//            btnClearPreview.setBackground(getDrawable(R.drawable.btn_enable_background));
+
             Toast.makeText(this, R.string.start_record, Toast.LENGTH_LONG).show();
             isRecording = true;
             Log.i(TAG, "Started screen recording");

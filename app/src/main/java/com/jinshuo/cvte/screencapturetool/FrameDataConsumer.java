@@ -18,6 +18,7 @@ public class FrameDataConsumer implements FrameDataPublisher {
      * 开启线程
      */
     public void startConsume() {
+        Log.d(TAG, "startConsume: ");
         allowWork = true;
         notifyStart();
         Thread thread = new Thread(new Runnable() {
@@ -44,6 +45,7 @@ public class FrameDataConsumer implements FrameDataPublisher {
      * 终止线程
      */
     public void stopConsume() {
+        Log.d(TAG, "stopConsume: ");
         allowWork = false;
         notifyStop();
     }

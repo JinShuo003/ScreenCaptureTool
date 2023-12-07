@@ -17,17 +17,17 @@
         android:orientation="horizontal"
         android:gravity="center">
         <FrameLayout
-            android:id="@+id/surface_layout"
+            android:id="@+id/texture_layout"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:background="@color/gray_FFAAAAAA"
             android:layout_gravity="center">
-            <SurfaceView
-                android:id="@+id/surface"
+            <TextureView
+                android:id="@+id/textureView"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
-            </SurfaceView>
+            </TextureView>
         </FrameLayout>
 
         <FrameLayout
@@ -68,6 +68,19 @@
             android:textSize="20dp"
             android:background="@drawable/start_record_btn_background">
         </Button>
+
+<!--        <Button-->
+<!--            android:id="@+id/btn_clear_surface"-->
+<!--            app:backgroundTint="@null"-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="50dp"-->
+<!--            android:layout_marginBottom="20dp"-->
+<!--            android:text="@string/clear_surface"-->
+<!--            android:textColor="@color/black_FF000000"-->
+<!--            android:textStyle="bold"-->
+<!--            android:textSize="20dp"-->
+<!--            android:background="@drawable/clear_surface_btn_background">-->
+<!--        </Button>-->
 
         <Button
             android:id="@+id/btn_screenshot"
