@@ -1,14 +1,19 @@
 package com.jinshuo.cvte.screencapturetool;
 
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
+import android.media.Image;
+import android.media.ImageReader;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -18,11 +23,14 @@ import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Surface;
 
 import androidx.annotation.NonNull;
+
+import com.jinshuo.cvte.screencapturetool.utils.ImageUtils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -89,18 +97,21 @@ public class ScreenCaptureService extends Service {
     }
 
     /**
-     * 获取MediaProjection实例
-     *
-     * @return MediaProjection instance
+     * 准备MediaProjection
+     * @param bundle
      */
-    private MediaProjection createMediaProjection() {
-        return ((MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE)).getMediaProjection(resultCode, data);
+    private void prepareMediaProjection(Bundle bundle) {
+        createNotificationChannel();
+        resultCode = bundle.getInt("code");
+        data = bundle.getParcelable("data");
+        mediaProjection = ((MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE)).getMediaProjection(resultCode, data);
     }
 
     /**
      * 开始录制屏幕
      */
-    private void startCapture() {
+    private void startCapture(Bundle bundle) {
+        prepareMediaProjection(bundle);
         startVideoEncoder();
         isRecording = true;
     }
@@ -167,10 +178,38 @@ public class ScreenCaptureService extends Service {
     /**
      * 结束录制屏幕
      */
-    public void stopCapture() {
+    private void stopCapture() {
         isRecording = false;
         mediaCodec.stop();
         mediaCodec.release();
+    }
+
+    /**
+     * 截屏
+     */
+    private Bitmap screenshot(Bundle bundle) {
+        prepareMediaProjection(bundle);
+
+        @SuppressLint("WrongConstant") ImageReader imageReader = ImageReader.newInstance(
+                mScreenWidth,
+                mScreenHeight,
+                PixelFormat.RGBA_8888, 1);
+        virtualDisplay = mediaProjection.createVirtualDisplay("screen-mirror",
+                mScreenWidth,
+                mScreenHeight,
+                mScreenDensity,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader.getSurface(), null, null);
+
+        SystemClock.sleep(200);
+        Image image = imageReader.acquireLatestImage();
+        if (image == null) {
+            return null;
+        }
+        Bitmap bitmap = ImageUtils.Image2Bitmap(image, mScreenWidth, mScreenHeight);
+        image.close();
+        virtualDisplay.release();
+        return bitmap;
     }
 
     @Override
@@ -195,12 +234,16 @@ public class ScreenCaptureService extends Service {
     }
 
     class ScreenCaptureBinder extends Binder {
-        public void startCapture() {
-            ScreenCaptureService.this.startCapture();
+        public void startCapture(Bundle bundle) {
+            ScreenCaptureService.this.startCapture(bundle);
         }
 
         public void stopCapture() {
             ScreenCaptureService.this.stopCapture();
+        }
+
+        public Bitmap screenshot(Bundle bundle) {
+            return ScreenCaptureService.this.screenshot(bundle);
         }
 
         public void registerScreenInfo(DisplayMetrics metrics) {
@@ -209,16 +252,6 @@ public class ScreenCaptureService extends Service {
             mScreenWidth = 720;
             mScreenHeight = 1280;
             mScreenDensity = metrics.densityDpi;
-        }
-
-        public void registerScreenCaptureRequestInfo(Bundle bundle) {
-            resultCode = bundle.getInt("code");
-            data = bundle.getParcelable("data");
-        }
-
-        public void prepareCaptureEnviroment() {
-            createNotificationChannel();
-            mediaProjection = createMediaProjection();
         }
 
         public void setEncoderStatusListener(MainActivity.EncoderStatusListener listener) {

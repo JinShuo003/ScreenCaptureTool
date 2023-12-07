@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
@@ -47,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
     private SurfaceHolder surfaceHolder;
 
     private boolean isScreenCaptureServiceConnected = false;
+    private boolean isRecording = false;
 
     /**
      * 基于LinkedTransferQueue实现无限大缓冲区的生产者-消费者，生产者
@@ -97,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
     private MediaProjectionManager mediaProjectionManager;
 
     private static final int SCREEN_CAPTURE_INTENT_REQUEST_CODE = 1000;
+    private static final int SCREENSHOT_INTENT_REQUEST_CODE = 1001;
 
     private static final int PERMISSION_REQUEST_CODE = 200;
 
@@ -126,7 +129,7 @@ public class MainActivity extends AppCompatActivity {
         stopRecordScreen();
     };
     View.OnClickListener screenshotOnClickListener = view -> {
-
+        screenshot();
     };
 
     /**
@@ -290,7 +293,22 @@ public class MainActivity extends AppCompatActivity {
 
         btnRecordControl.setOnClickListener(startRecordOnClickListener);
         btnRecordControl.setText(R.string.start_record);
+        isRecording = false;
         Toast.makeText(this, R.string.stop_record, Toast.LENGTH_LONG).show();
+    }
+
+    /**
+     * 截屏，如果当前正在录屏则将ScreenshotManager注册为观察者，从数据中截取一帧并保存
+     * 如果当前不在录屏，则开启MediaProjection+ImageReader
+     */
+    private void screenshot() {
+        if (isRecording) {
+
+        } else {
+            Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
+            startActivityForResult(screenCaptureIntent, SCREENSHOT_INTENT_REQUEST_CODE);
+
+        }
     }
 
     /**
@@ -302,30 +320,33 @@ public class MainActivity extends AppCompatActivity {
             canvas.drawColor(Color.BLACK, PorterDuff.Mode.CLEAR);
         }
     }
+
     /**
      * 接收授权结果
      */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK) {
+            Log.i(TAG, "onActivityResult: user denied");
+        }
+
+        Bundle bundle = new Bundle();
+        bundle.putInt("code", resultCode);
+        bundle.putParcelable("data", data);
 
         if (requestCode == SCREEN_CAPTURE_INTENT_REQUEST_CODE) {
-            if (resultCode == RESULT_OK) {
-                consumer.addObserver(videoFileManager);
-                consumer.addObserver(previewManager);
-                consumer.startConsume();
-                clearSurface();
-
-                Bundle bundle = new Bundle();
-                bundle.putInt("code", resultCode);
-                bundle.putParcelable("data", data);
-                screenCaptureBinder.registerScreenCaptureRequestInfo(bundle);
-                screenCaptureBinder.prepareCaptureEnviroment();
-                screenCaptureBinder.startCapture();
-                Log.i(TAG, "Started screen recording");
-            } else {
-                Log.i(TAG, "User cancelled");
-            }
+            consumer.addObserver(videoFileManager);
+            consumer.addObserver(previewManager);
+            consumer.startConsume();
+            clearSurface();
+            screenCaptureBinder.startCapture(bundle);
+            isRecording = true;
+            Log.i(TAG, "Started screen recording");
+        }
+        if (requestCode == SCREENSHOT_INTENT_REQUEST_CODE) {
+            Bitmap bitmap = screenCaptureBinder.screenshot(bundle);
+            ivScreenshot.setImageBitmap(bitmap);
         }
     }
 }

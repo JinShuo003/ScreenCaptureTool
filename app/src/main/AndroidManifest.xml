@@ -25,13 +25,6 @@
             android:foregroundServiceType="mediaProjection">
         </service>
 
-        <service
-            android:name=".ScreenshotService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection">
-        </service>
-
         <activity
             android:name=".MainActivity"
             android:exported="true">
