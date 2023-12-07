@@ -73,12 +73,12 @@ public class ScreenCaptureService extends Service {
 
         /*以下是对Android 8.0的适配*/
         //普通notification适配
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             builder.setChannelId("notification_id");
         }
         //前台服务notification适配
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationManager notificationManager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+            NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             NotificationChannel channel = new NotificationChannel("notification_id", "notification_name", NotificationManager.IMPORTANCE_LOW);
             notificationManager.createNotificationChannel(channel);
         }
@@ -90,10 +90,11 @@ public class ScreenCaptureService extends Service {
 
     /**
      * 获取MediaProjection实例
+     *
      * @return MediaProjection instance
      */
     private MediaProjection createMediaProjection() {
-        return ((MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE)).getMediaProjection(resultCode, data);
+        return ((MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE)).getMediaProjection(resultCode, data);
     }
 
     /**
@@ -109,11 +110,11 @@ public class ScreenCaptureService extends Service {
      */
     MediaCodec.Callback encoderCallback = new MediaCodec.Callback() {
         @Override
-        public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {}
+        public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {
+        }
 
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
-            Log.d(TAG, "onOutputBufferAvailable: bufferIndex: " + i);
             if (i >= 0) {
                 outputBuffer = mediaCodec.getOutputBuffer(i);
                 if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
@@ -127,10 +128,12 @@ public class ScreenCaptureService extends Service {
         }
 
         @Override
-        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {}
+        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {
+        }
 
         @Override
-        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {}
+        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {
+        }
     };
 
     /**
@@ -222,6 +225,7 @@ public class ScreenCaptureService extends Service {
             ScreenCaptureService.this.encoderStatusListener = listener;
         }
     }
+
     @Override
     public IBinder onBind(Intent intent) {
         return new ScreenCaptureBinder();

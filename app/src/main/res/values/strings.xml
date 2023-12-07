@@ -4,6 +4,7 @@
     <string name="stop_record">Stop Record</string>
     <string name="start_preview">Start Preview</string>
     <string name="stop_preview">Stop Preview</string>
+    <string name="play_video">Play Video</string>
     <string name="screenshot">Take a Screenshot</string>
     <string name="permission_not_enough">Permission not enough</string>
 

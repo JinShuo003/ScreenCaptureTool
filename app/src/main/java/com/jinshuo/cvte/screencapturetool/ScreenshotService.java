@@ -25,6 +25,8 @@ import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.util.Log;
 
+import com.jinshuo.cvte.screencapturetool.utils.ImageUtils;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;

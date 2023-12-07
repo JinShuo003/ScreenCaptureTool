@@ -1,4 +1,4 @@
-package com.jinshuo.cvte.screencapturetool;
+package com.jinshuo.cvte.screencapturetool.utils;
 
 import android.graphics.Bitmap;
 import android.media.Image;

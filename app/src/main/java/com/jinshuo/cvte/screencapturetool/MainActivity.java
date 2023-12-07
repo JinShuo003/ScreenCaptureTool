@@ -5,8 +5,10 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.media.MediaCodec;
-import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
@@ -27,14 +29,14 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+import com.jinshuo.cvte.screencapturetool.observer.PreviewManager;
+import com.jinshuo.cvte.screencapturetool.observer.ScreenshotManager;
+import com.jinshuo.cvte.screencapturetool.observer.VideoFileManager;
+import com.jinshuo.cvte.screencapturetool.utils.ScreenUtils;
+
 import java.nio.ByteBuffer;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.TransferQueue;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
@@ -47,14 +49,20 @@ public class MainActivity extends AppCompatActivity {
     private boolean isScreenCaptureServiceConnected = false;
 
     /**
+     * 基于LinkedTransferQueue实现无限大缓冲区的生产者-消费者，生产者
+     * 装入数据后立即返回，消费者无数据可消费时阻塞在取操作
+     * 基于发布-订阅模式实现了数据获取与录屏、预览、截屏等操作的解耦
+     */
+    private TransferQueue frameQueue = new LinkedTransferQueue<>();
+    // 消费者，负责消费解码出的数据
+    FrameDataConsumer consumer = new FrameDataConsumer();
+    VideoFileManager videoFileManager = new VideoFileManager();
+    PreviewManager previewManager = new PreviewManager();
+    ScreenshotManager screenshotManager = new ScreenshotManager();
+
+    /**
      * 用于接收编码数据的callback
      */
-    ByteBuffer encoderConfigDataBuffer;
-    MediaFormat mediaFormat;
-    MediaCodec.BufferInfo outputBufferInfo;
-    ByteBuffer outputBuffer;
-    byte[] outputData;
-
     public interface EncoderStatusListener {
         void onEncoderCreated(MediaFormat format);
 
@@ -63,42 +71,30 @@ public class MainActivity extends AppCompatActivity {
         void onDataReady(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer);
     }
 
-    public void putData(byte[] data){
-        if(queue.size()>=MAX_QUEUE_SIZE){
-            queue.poll();
-        }
-        queue.add(data.clone());
+    public void putNewFrame(MediaCodec.BufferInfo outputBufferInfo, ByteBuffer outputBuffer){
+        byte[] frameData = new byte[outputBufferInfo.size];
+        outputBuffer.get(frameData);
+        frameQueue.offer(frameData.clone());
+        Log.d(TAG, "putNewFrame: frameQueue.size: " + frameQueue.size());
     }
 
     EncoderStatusListener listener = new EncoderStatusListener() {
         @Override
         public void onEncoderCreated(MediaFormat mediaFormat) {
-            MainActivity.this.mediaFormat = mediaFormat;
         }
 
         @Override
         public void onConfigReady(ByteBuffer configBuffer) {
-            encoderConfigDataBuffer = configBuffer;
         }
 
         @Override
         public void onDataReady(MediaCodec.BufferInfo outputBufferInfo, ByteBuffer outputBuffer) {
-            MainActivity.this.outputBufferInfo = outputBufferInfo;
-            MainActivity.this.outputBuffer = outputBuffer;
-            outputData = new byte[outputBufferInfo.size];
-            outputBuffer.get(outputData);
-            putData(outputData);
-            doSaveVideo();
-            doScreenshot();
+            putNewFrame(outputBufferInfo, outputBuffer);
         }
     };
     private ScreenCaptureService.ScreenCaptureBinder screenCaptureBinder;
 
-    private boolean isRecording = false;
-    private boolean isPreviewing = false;
     private MediaProjectionManager mediaProjectionManager;
-    private MediaCodec previewDecoder;
-    OutputStream outputStream;
 
     private static final int SCREEN_CAPTURE_INTENT_REQUEST_CODE = 1000;
 
@@ -150,12 +146,12 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {
-                Log.d(TAG, "surfaceCreated: ");
+                Log.d(TAG, "surfaceChanged: ");
             }
 
             @Override
             public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
-                Log.d(TAG, "surfaceCreated: ");
+                Log.d(TAG, "surfaceDestroyed: ");
             }
         });
 
@@ -164,6 +160,10 @@ public class MainActivity extends AppCompatActivity {
 
         btnRecordControl.setOnClickListener(startRecordOnClickListener);
         btnScreenshot.setOnClickListener(screenshotOnClickListener);
+
+        consumer.registerBuffer(frameQueue);
+
+        previewManager.registerPreviewInfo(displayWidth, displayHeight, surfaceHolder.getSurface());
     }
 
     private void initDisplayInfo() {
@@ -227,7 +227,6 @@ public class MainActivity extends AppCompatActivity {
             screenCaptureBinder = (ScreenCaptureService.ScreenCaptureBinder) iBinder;
             screenCaptureBinder.registerScreenInfo(displayMetrics);
             screenCaptureBinder.setEncoderStatusListener(listener);
-
         }
 
         @Override
@@ -236,195 +235,73 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    /**
-     * 异步解码，Input可用时写入最新的h264数据，Output可用时渲染到Surface上
-     */
-    MediaCodec.Callback decoderCallback = new MediaCodec.Callback() {
-        @Override
-        public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {
-            Log.d(TAG, "onInputBufferAvailable: decoder, inputBuffer: " + i);
-            if (i >= 0 && outputBuffer != null) {
-                ByteBuffer buffer = mediaCodec.getInputBuffer(i);
-                buffer.put(outputBuffer);
-                mediaCodec.queueInputBuffer(i, 0, outputBufferInfo.size, computePresentationTime(i), 0);
-            } else {
-                mediaCodec.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
-            }
-        }
-
-        @Override
-        public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
-            Log.d(TAG, "onOutputBufferAvailable: decoder, outputBuffer: " + i);
-            ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(i);
-            mediaCodec.releaseOutputBuffer(i, true);
-        }
-
-        @Override
-        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {
-        }
-
-        @Override
-        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {
-        }
-    };
-
-    private void startPreviewVideoDecoder() {
-        try {
-//            String mime = mediaFormat.getString(MediaFormat.KEY_MIME);
-//            previewDecoder = MediaCodec.createDecoderByType(mime);
-            previewDecoder = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return;
-        }
-//        previewDecoder.setCallback(decoderCallback);
-
-        final MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, displayWidth, displayHeight);
-        format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        format.setInteger(MediaFormat.KEY_BIT_RATE, displayWidth * displayHeight);
-        format.setInteger(MediaFormat.KEY_FRAME_RATE, 20);
-        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
-//        format.setByteBuffer("csd-0", encoderConfigDataBuffer);
-
-        previewDecoder.configure(format, surfaceHolder.getSurface(), null, 0);
-        previewDecoder.start();
-    }
-
-    /**
-     * 创建h264文件，初始化输出流
-     */
-    private void initOutputStream() {
-        // 创建输出目录
-        String outputDirectory = getExternalFilesDir("") + "/ScreenCapture";
-        StorageUtils.makeDirectory(outputDirectory);
-
-        // 创建h264文件
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
-        Date curDate = new Date(System.currentTimeMillis());
-        String curTime = formatter.format(curDate).replace(" ", "");
-        String screenCaptureFilename = "ScreenCapture_" + curTime + ".h264";
-
-        File file = new File(outputDirectory, screenCaptureFilename);
-        try {
-            outputStream = new FileOutputStream(file);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+//    /**
+//     * 异步解码，Input可用时写入最新的h264数据，Output可用时渲染到Surface上
+//     */
+//    MediaCodec.Callback decoderCallback = new MediaCodec.Callback() {
+//        @Override
+//        public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {
+//            Log.d(TAG, "onInputBufferAvailable: decoder, inputBuffer: " + i);
+//            if (i >= 0 && outputBuffer != null) {
+//                ByteBuffer buffer = mediaCodec.getInputBuffer(i);
+//                buffer.put(outputBuffer);
+//                mediaCodec.queueInputBuffer(i, 0, outputBufferInfo.size, computePresentationTime(i), 0);
+//            } else {
+//                mediaCodec.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+//            }
+//        }
+//
+//        @Override
+//        public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
+//            Log.d(TAG, "onOutputBufferAvailable: decoder, outputBuffer: " + i);
+//            ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(i);
+//            mediaCodec.releaseOutputBuffer(i, true);
+//        }
+//
+//        @Override
+//        public void onError(@NonNull MediaCodec mediaCodec, @NonNull MediaCodec.CodecException e) {
+//        }
+//
+//        @Override
+//        public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {
+//        }
+//    };
 
     /**
      * 开始录屏
      */
     private void startRecordScreen() {
-        initOutputStream();
-
         Intent screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent();
         startActivityForResult(screenCaptureIntent, SCREEN_CAPTURE_INTENT_REQUEST_CODE);
 
         btnRecordControl.setOnClickListener(stopRecordOnClickListener);
         btnRecordControl.setText(R.string.stop_record);
-//        btnRecordControl.setBackground(getDrawable(R.drawable.stop_record_btn_background));
-
-        isRecording = true;
         Toast.makeText(this, R.string.start_record, Toast.LENGTH_LONG).show();
     }
 
-    public void stopDecoderThread(){
-        isRunning =false;
-    }
     /**
      * 结束录屏
      */
     private void stopRecordScreen() {
-        stopDecoderThread();
         screenCaptureBinder.stopCapture();
-        previewDecoder.stop();
-        previewDecoder.release();
+        consumer.stopConsume();
+        consumer.removeObserver(videoFileManager);
+        consumer.removeObserver(previewManager);
 
         btnRecordControl.setOnClickListener(startRecordOnClickListener);
         btnRecordControl.setText(R.string.start_record);
-
-//        btnRecordControl.setBackground(getDrawable(R.drawable.start_record_btn_background));
-
-        isRecording = false;
-        Toast.makeText(this, R.string.start_record, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.stop_record, Toast.LENGTH_LONG).show();
     }
 
     /**
-     * 保存文件
+     * 清空预览画布
      */
-    private void doSaveVideo() {
-//        byte[] outData = new byte[outputBufferInfo.size];
-//        outputBuffer.get(outData);
-        try {
-            outputStream.write(outputData);
-        } catch (IOException e) {
-            e.printStackTrace();
+    private void clearSurface() {
+        Canvas canvas = surfaceHolder.lockCanvas();
+        if (null != canvas) {
+            canvas.drawColor(Color.BLACK, PorterDuff.Mode.CLEAR);
         }
     }
-
-    private long computePresentationTime(long frameIndex) {
-        return 132 + frameIndex * 1000000 / 20;
-    }
-
-    /**
-     * 截屏
-     */
-    private void doScreenshot() {
-        if (!isRecording) {
-
-        } else {
-
-        }
-    }
-
-    private boolean isRunning = false;
-    private static final int MAX_QUEUE_SIZE = 1000;
-    private ArrayBlockingQueue queue = new ArrayBlockingQueue<>(MAX_QUEUE_SIZE);
-
-
-    public void startDecoderThread() {
-        Thread decoderThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                isRunning = true;
-                byte[] input = null;
-                while (isRunning) {
-                    if (queue.size() > 0) {
-                        input = (byte[]) queue.poll();
-                    }
-                    if (input != null) {
-                        try {
-                            int inputBufferIndex = previewDecoder.dequeueInputBuffer(0);
-                            ByteBuffer inputBuffer;
-                            if (inputBufferIndex >= 0) {
-                                inputBuffer = previewDecoder.getInputBuffer(inputBufferIndex);
-                                inputBuffer.clear();
-                                inputBuffer.put(input, 0, input.length);
-                                previewDecoder.queueInputBuffer(inputBufferIndex, 0, input.length, computePresentationTime(inputBufferIndex), 0);
-                            }
-                            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-                            int outputBufferIndex = previewDecoder.dequeueOutputBuffer(bufferInfo, 0);
-                            while (outputBufferIndex >= 0) {
-                                previewDecoder.releaseOutputBuffer(outputBufferIndex, true);
-                                outputBufferIndex = previewDecoder.dequeueOutputBuffer(bufferInfo, 0);
-                            }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    } else {
-                        try {
-                            Thread.sleep(500);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }
-        });
-        decoderThread.start();
-    }
-
     /**
      * 接收授权结果
      */
@@ -434,8 +311,10 @@ public class MainActivity extends AppCompatActivity {
 
         if (requestCode == SCREEN_CAPTURE_INTENT_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
-                startPreviewVideoDecoder();
-                startDecoderThread();
+                consumer.addObserver(videoFileManager);
+                consumer.addObserver(previewManager);
+                consumer.startConsume();
+                clearSurface();
 
                 Bundle bundle = new Bundle();
                 bundle.putInt("code", resultCode);
