@@ -11,7 +11,7 @@ import java.util.concurrent.TransferQueue;
 public class VideoStreamConsumer implements VideoStreamPublisher {
     private static final String TAG = "FrameDataComsumer";
     boolean allowWork = true;
-    TransferQueue frameQueue;
+    TransferQueue<FrameData> frameQueue;
     HashSet<VideoStreamObserver> observerSet = new HashSet<>();
 
     /**
@@ -24,15 +24,15 @@ public class VideoStreamConsumer implements VideoStreamPublisher {
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
-                byte[] input;
+                FrameData frameData;
                 while (allowWork) {
                     try {
-                        input = (byte[]) frameQueue.take();
+                        frameData = frameQueue.take();
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
-                    if (input != null) {
-                        notifyDataReady(input);
+                    if (frameData.getData() != null) {
+                        notifyDataReady(frameData);
                         Log.d(TAG, "startDecoderThread: current frame consumed, frameQueue.size: " + frameQueue.size());
                     }
                 }
@@ -76,9 +76,9 @@ public class VideoStreamConsumer implements VideoStreamPublisher {
     }
 
     @Override
-    public void notifyDataReady(byte[] data) {
+    public void notifyDataReady(FrameData frameData) {
         for (VideoStreamObserver observer: observerSet) {
-            observer.update(data);
+            observer.dataReady(frameData);
         }
     }
 
@@ -88,4 +88,5 @@ public class VideoStreamConsumer implements VideoStreamPublisher {
             observer.stop();
         }
     }
+
 }

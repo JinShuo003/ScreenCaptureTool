@@ -47,13 +47,21 @@ public class ScreenCaptureService extends Service {
 
     boolean isRecording = false;
 
+    boolean outputFormatInited = false;
     int resultCode;
     Intent data;
     private int mScreenWidth;
     private int mScreenHeight;
     private int mScreenDensity;
 
-    private MainActivity.EncoderStatusListener encoderStatusListener;
+    public interface EncoderStatusListener {
+        void onOutputFormatInited(MediaFormat mediaFormat);
+        void onOutputFormatChanged(MediaFormat mediaFormat);
+        void onConfigReady(ByteBuffer configBuffer);
+        void onMediaFormatChanged(MediaFormat format);
+        void onDataReady(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer);
+    }
+    private EncoderStatusListener encoderStatusListener;
 
     public ScreenCaptureService() {
     }
@@ -116,7 +124,8 @@ public class ScreenCaptureService extends Service {
             @Override
             public void run() {
                 Log.d(TAG, "run: ThreadId: " + Thread.currentThread().getId());
-                startVideoEncoder();
+                initVideoEncoder();
+                mediaCodec.start();
             }
         });
         thread.start();
@@ -152,35 +161,38 @@ public class ScreenCaptureService extends Service {
 
         @Override
         public void onOutputFormatChanged(@NonNull MediaCodec mediaCodec, @NonNull MediaFormat mediaFormat) {
+            if (!outputFormatInited) {
+                encoderStatusListener.onOutputFormatInited(mediaCodec.getOutputFormat());
+            } else {
+                encoderStatusListener.onOutputFormatChanged(mediaCodec.getOutputFormat());
+
+            }
         }
     };
 
     /**
      * 开启编码器
      */
-    private void startVideoEncoder() {
-        try {
-            mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return;
+    private void initVideoEncoder() {
+        if (mediaCodec == null) {
+            try {
+                mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+                format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, mScreenWidth, mScreenHeight);
+                format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+                format.setInteger(MediaFormat.KEY_BIT_RATE, mScreenWidth * mScreenHeight);
+                format.setInteger(MediaFormat.KEY_FRAME_RATE, 20);
+                format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+                encoderStatusListener.onMediaFormatChanged(format);
+            } catch (IOException e) {
+                e.printStackTrace();
+                return;
+            }
         }
         mediaCodec.setCallback(encoderCallback);
-        format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, mScreenWidth, mScreenHeight);
-        format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        format.setInteger(MediaFormat.KEY_BIT_RATE, mScreenWidth * mScreenHeight);
-        format.setInteger(MediaFormat.KEY_FRAME_RATE, 20);
-        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
-        mediaCodec.configure(
-                format,
-                null,
-                null,
-                MediaCodec.CONFIGURE_FLAG_ENCODE);
-        encoderStatusListener.onEncoderCreated(format);
+        mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         surface = mediaCodec.createInputSurface();
         virtualDisplay = mediaProjection.createVirtualDisplay(TAG, mScreenWidth, mScreenHeight, mScreenDensity,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null);
-        mediaCodec.start();
         Log.d(TAG, "startVideoEncoder: ThreadId: " + Thread.currentThread().getId());
     }
 
@@ -190,7 +202,7 @@ public class ScreenCaptureService extends Service {
     private void stopCapture() {
         isRecording = false;
         mediaCodec.stop();
-        mediaCodec.release();
+        mediaCodec.reset();
     }
 
     /**
@@ -263,7 +275,7 @@ public class ScreenCaptureService extends Service {
             mScreenDensity = metrics.densityDpi;
         }
 
-        public void setEncoderStatusListener(MainActivity.EncoderStatusListener listener) {
+        public void setEncoderStatusListener(EncoderStatusListener listener) {
             ScreenCaptureService.this.encoderStatusListener = listener;
         }
     }

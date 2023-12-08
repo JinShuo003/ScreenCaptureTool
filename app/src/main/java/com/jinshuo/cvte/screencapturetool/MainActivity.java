@@ -60,7 +60,7 @@ public class MainActivity extends AppCompatActivity {
      * 装入数据后立即返回，消费者无数据可消费时阻塞在取操作
      * 基于发布-订阅模式实现了数据获取与录屏、预览、截屏等操作的解耦
      */
-    private TransferQueue frameQueue = new LinkedTransferQueue<>();
+    private TransferQueue<FrameData> frameQueue = new LinkedTransferQueue<>();
     // 消费者，负责消费解码出的数据
     VideoStreamConsumer consumer = new VideoStreamConsumer();
     VideoFileManager videoFileManager = new VideoFileManager();
@@ -70,24 +70,38 @@ public class MainActivity extends AppCompatActivity {
     /**
      * 用于接收编码数据的callback
      */
-    public interface EncoderStatusListener {
-        void onEncoderCreated(MediaFormat format);
-
-        void onConfigReady(ByteBuffer configBuffer);
-
-        void onDataReady(MediaCodec.BufferInfo bufferInfo, ByteBuffer outputBuffer);
-    }
-
     public void putNewFrame(MediaCodec.BufferInfo outputBufferInfo, ByteBuffer outputBuffer){
-        byte[] frameData = new byte[outputBufferInfo.size];
-        outputBuffer.get(frameData);
-        frameQueue.offer(frameData.clone());
+        byte[] data = new byte[outputBufferInfo.size];
+        outputBuffer.get(data);
+        frameQueue.offer(new FrameData(data.clone(), outputBufferInfo));
         Log.d(TAG, "putNewFrame: frameQueue.size: " + frameQueue.size());
     }
 
-    EncoderStatusListener listener = new EncoderStatusListener() {
+    ScreenCaptureService.EncoderStatusListener listener = new ScreenCaptureService.EncoderStatusListener() {
+
         @Override
-        public void onEncoderCreated(MediaFormat mediaFormat) {
+        public void onMediaFormatChanged(MediaFormat mediaFormat) {
+            previewManager.encoderEncodeMediaFormatChange(mediaFormat);
+            screenshotManager.encoderEncodeMediaFormatChange(mediaFormat);
+            videoFileManager.encoderEncodeMediaFormatChange(mediaFormat);
+        }
+
+        @Override
+        public void onOutputFormatInited(MediaFormat mediaFormat) {
+            previewManager.encoderOutputMediaFormatChange(mediaFormat);
+            screenshotManager.encoderOutputMediaFormatChange(mediaFormat);
+            videoFileManager.encoderOutputMediaFormatChange(mediaFormat);
+
+            consumer.addObserver(videoFileManager);
+            consumer.addObserver(previewManager);
+            consumer.startConsume();
+        }
+
+        @Override
+        public void onOutputFormatChanged(MediaFormat outputMediaFormat) {
+//            previewManager.encoderOutputMediaFormatChange(outputMediaFormat);
+//            screenshotManager.encoderOutputMediaFormatChange(outputMediaFormat);
+//            videoFileManager.encoderOutputMediaFormatChange(outputMediaFormat);
         }
 
         @Override
@@ -380,6 +394,7 @@ public class MainActivity extends AppCompatActivity {
         if (null != canvas) {
             canvas.drawColor(Color.BLACK, PorterDuff.Mode.CLEAR);
         }
+//        textureView.unlockCanvasAndPost(canvas);
     }
 
     /**
@@ -398,10 +413,6 @@ public class MainActivity extends AppCompatActivity {
         bundle.putParcelable("data", data);
 
         if (requestCode == SCREEN_CAPTURE_INTENT_REQUEST_CODE) {
-            consumer.addObserver(videoFileManager);
-            consumer.addObserver(previewManager);
-            consumer.startConsume();
-            clearSurface();
             screenCaptureBinder.startCapture(bundle);
 
             btnRecordControl.setOnClickListener(stopRecordOnClickListener);

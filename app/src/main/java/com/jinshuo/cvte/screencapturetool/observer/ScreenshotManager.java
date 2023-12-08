@@ -1,7 +1,10 @@
 package com.jinshuo.cvte.screencapturetool.observer;
 
 import android.graphics.Bitmap;
+import android.media.MediaCodec;
+import android.media.MediaFormat;
 
+import com.jinshuo.cvte.screencapturetool.FrameData;
 import com.jinshuo.cvte.screencapturetool.MainActivity;
 import com.jinshuo.cvte.screencapturetool.ScreenCaptureApplication;
 import com.jinshuo.cvte.screencapturetool.utils.StorageUtils;
@@ -20,12 +23,22 @@ public class ScreenshotManager implements VideoStreamObserver {
     }
 
     @Override
-    public void update(byte[] data) {
-        latestFrame = data;
+    public void dataReady(FrameData frameData) {
+        latestFrame = frameData.getData();
     }
 
     @Override
     public void stop() {
+
+    }
+
+    @Override
+    public void encoderEncodeMediaFormatChange(MediaFormat format) {
+
+    }
+
+    @Override
+    public void encoderOutputMediaFormatChange(MediaFormat format) {
 
     }
 

@@ -6,7 +6,10 @@ import android.media.MediaFormat;
 import android.util.Log;
 import android.view.Surface;
 
+import com.jinshuo.cvte.screencapturetool.FrameData;
+
 import java.io.IOException;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 public class PreviewManager implements VideoStreamObserver {
@@ -54,7 +57,7 @@ public class PreviewManager implements VideoStreamObserver {
     /**
      * 保存文件
      */
-    private void doDecodeFrame(byte[] frameData) {
+    private void doDecodeFrame(FrameData frameData) {
         Log.d(TAG, "doDecodeFrame: ThreadId: " + Thread.currentThread().getId());
         try {
             int inputBufferIndex = previewDecoder.dequeueInputBuffer(0);
@@ -62,16 +65,16 @@ public class PreviewManager implements VideoStreamObserver {
             if (inputBufferIndex >= 0) {
                 inputBuffer = previewDecoder.getInputBuffer(inputBufferIndex);
                 inputBuffer.clear();
-                inputBuffer.put(frameData, 0, frameData.length);
-                previewDecoder.queueInputBuffer(inputBufferIndex, 0, frameData.length, computePresentationTime(inputBufferIndex), 0);
+                inputBuffer.put(frameData.getData(), 0, frameData.getInfo().size);
+                previewDecoder.queueInputBuffer(inputBufferIndex, 0, frameData.getInfo().size, computePresentationTime(inputBufferIndex), 0);
                 Log.d(TAG, "doDecodeFrame: send a frame to decoder");
             }
-            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-            int outputBufferIndex = previewDecoder.dequeueOutputBuffer(bufferInfo, 0);
+            MediaCodec.BufferInfo _bufferInfo = new MediaCodec.BufferInfo();
+            int outputBufferIndex = previewDecoder.dequeueOutputBuffer(_bufferInfo, 0);
             while (outputBufferIndex >= 0) {
                 previewDecoder.releaseOutputBuffer(outputBufferIndex, true);
                 Log.d(TAG, "doDecodeFrame: render a frame to surface");
-                outputBufferIndex = previewDecoder.dequeueOutputBuffer(bufferInfo, 0);
+                outputBufferIndex = previewDecoder.dequeueOutputBuffer(_bufferInfo, 0);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -90,12 +93,22 @@ public class PreviewManager implements VideoStreamObserver {
     }
 
     @Override
-    public void update(byte[] data) {
-        doDecodeFrame(data);
+    public void dataReady(FrameData frameData) {
+        doDecodeFrame(frameData);
     }
 
     @Override
     public void stop() {
         releaseVideoDecoder();
+    }
+
+    @Override
+    public void encoderEncodeMediaFormatChange(MediaFormat format) {
+
+    }
+
+    @Override
+    public void encoderOutputMediaFormatChange(MediaFormat format) {
+
     }
 }
