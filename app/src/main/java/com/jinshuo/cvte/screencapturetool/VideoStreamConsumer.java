@@ -3,7 +3,7 @@ package com.jinshuo.cvte.screencapturetool;
 import android.util.Log;
 
 import com.jinshuo.cvte.screencapturetool.observer.VideoStreamObserver;
-import com.jinshuo.cvte.screencapturetool.observerInterface.VideoStreamPublisher;
+import com.jinshuo.cvte.screencapturetool.publishier.VideoStreamPublisher;
 
 import java.util.HashSet;
 import java.util.concurrent.TransferQueue;

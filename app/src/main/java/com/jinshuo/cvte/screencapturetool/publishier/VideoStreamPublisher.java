@@ -1,4 +1,4 @@
-package com.jinshuo.cvte.screencapturetool.observerInterface;
+package com.jinshuo.cvte.screencapturetool.publishier;
 
 import com.jinshuo.cvte.screencapturetool.observer.VideoStreamObserver;
 
